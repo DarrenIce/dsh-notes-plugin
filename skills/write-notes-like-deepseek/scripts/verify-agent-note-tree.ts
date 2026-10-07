@@ -1,6 +1,6 @@
 /**
  * Verify tree: lifecycle/class/filename/INDEX and internal relative markdown links.
- * Run: npx tsx scripts/verify-agent-note-tree.ts
+ * Run: npx tsx <skill-dir>/scripts/verify-agent-note-tree.ts
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";

@@ -25,6 +25,10 @@
 ## 接入建议
 
 - 轻量（个人/无 git）：前两个脚本即可，归档封印在第一次归档后自然生效。
-- 完整（团队）：`npm run verify-notes` 三线串进 CI，失败即红（本仓库 `.github/workflows/verify-notes.yml` 可作模板）。
+- 完整（团队）：`npm run verify-notes` 三线串进 CI，失败即红（本 Skill 的 `templates/verify-notes.yml` 可作模板，复制到宿主根目录 `.github/workflows/` 并核对脚本路径后启用）。
 
 三个校验脚本方法上来自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，按通用中文单语宿主裁过：无双语三件套、无 DSH 迁仓豁免。锚点体检是可选软报告，不是 DSH 门禁。
+
+## 脚本路径
+
+本文的 `scripts/` 相对于 Skill 安装目录。运行命令时保持当前目录为宿主项目根目录，并使用实际 Skill 路径调用脚本；安装本身不会创建宿主 npm scripts。

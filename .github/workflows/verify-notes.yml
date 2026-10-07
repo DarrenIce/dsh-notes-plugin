@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Verify note tree, format, and archive seals
         env:
@@ -31,6 +31,16 @@ jobs:
           # skips append-only (seal-vs-disk still runs).
           AGENT_NOTE_ARCHIVE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          npx tsx scripts/verify-agent-note-tree.ts
-          npx tsx scripts/verify-agent-note-format.ts
-          npx tsx scripts/verify-archived-agent-notes.ts
+          npx tsx skills/write-notes-like-deepseek/scripts/verify-agent-note-tree.ts
+          npx tsx skills/write-notes-like-deepseek/scripts/verify-agent-note-format.ts
+          npx tsx skills/write-notes-like-deepseek/scripts/verify-archived-agent-notes.ts
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify skill installation and host commands
+        run: npm run test-skill-install

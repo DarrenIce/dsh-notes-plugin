@@ -4,7 +4,7 @@
  *   B. implemented notes with zero inbound code anchors (suspected missing anchor)
  * Exit code is always 0 — this is an advisory report, not a gate.
  * Env: AGENT_NOTE_CODE_ROOT (default: cwd) — source root to scan.
- * Run: npx tsx scripts/check-note-anchors.ts
+ * Run: npx tsx <skill-dir>/scripts/check-note-anchors.ts
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";

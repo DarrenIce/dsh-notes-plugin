@@ -2,8 +2,8 @@
  * Verify frozen archived Agent Notes: exact head layout, manifest.json seals,
  * append-only extension vs a git baseline (skipped gracefully without git).
  * Usage:
- *   npx tsx scripts/verify-archived-agent-notes.ts          # verify only
- *   npx tsx scripts/verify-archived-agent-notes.ts --write  # verify, then seal unsealed files
+ *   npx tsx <skill-dir>/scripts/verify-archived-agent-notes.ts          # verify only
+ *   npx tsx <skill-dir>/scripts/verify-archived-agent-notes.ts --write  # verify, then seal unsealed files
  * Env: AGENT_NOTE_ARCHIVE_BASE_REF (default HEAD) — git ref the manifest is compared against.
  */
 import { createHash } from "node:crypto";

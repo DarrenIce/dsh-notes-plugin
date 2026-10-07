@@ -2,7 +2,7 @@
  * Enforce Agent Note headers, lifecycle-specific sections, alternatives.
  * Implemented notes may not carry proposal-era H2s; present tense in the
  * body is a prose rule, not a lexical scan.
- * Run: npx tsx scripts/verify-agent-note-format.ts
+ * Run: npx tsx <skill-dir>/scripts/verify-agent-note-format.ts
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

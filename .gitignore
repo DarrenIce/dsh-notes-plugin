@@ -5,3 +5,6 @@ docs/
 .agents/notes/
 # 7.8MB 脱机内联数据产物不纳入版本库
 demo.html
+
+# 本地生成的轻量看板
+/board.html

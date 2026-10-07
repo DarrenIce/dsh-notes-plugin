@@ -1,6 +1,6 @@
 /**
  * CLI tool to archive an implemented Agent Note with frozen manifest sealing.
- * Usage: npx tsx scripts/archive-agent-note.ts .agents/notes/implemented/<class>/<filename>.md [--superseded-by <new-note-path>]
+ * Usage: npx tsx <skill-dir>/scripts/archive-agent-note.ts .agents/notes/implemented/<class>/<filename>.md [--superseded-by <new-note-path>]
  * --superseded-by writes a relative link into the NEW note, never into the archived file.
  */
 import { createHash } from "node:crypto";
@@ -17,7 +17,7 @@ if (supersededByArgIdx !== -1 && !supersededByArg) {
   process.exit(1);
 }
 if (!targetArg) {
-  console.error("Usage: npx tsx scripts/archive-agent-note.ts <path-to-note> [--superseded-by <new-note-path>]");
+  console.error("Usage: npx tsx <skill-dir>/scripts/archive-agent-note.ts <path-to-note> [--superseded-by <new-note-path>]");
   process.exit(1);
 }
 
