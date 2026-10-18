@@ -78,6 +78,8 @@ description: Use when a change is non-trivial by DSH standards (behavior, archit
 
 ## 2. 文件格式（检查脚本会核对）
 
+正文一律用简体中文撰写（代码、命令、专有名词除外），与触发任务的输入语言无关。
+
 前三行固定：
 
 ```markdown
@@ -92,7 +94,7 @@ Status: <状态>
 - `implemented`：`## Problem` → `## Decision`（现在时） → …自由节… → `## Alternatives considered` → `## Consequences`
 - `rejected`：冻结的 proposal 形态，结论在 `Status:` 行
 
-> 备选方案必填：只记录真实考虑过的对手方案，先写它最强的理由再否定。没有过的选项不要编。「不做 / 复用现状」仅当当时真的权衡过才写。脚本只检查有没有 `## Alternatives considered`。
+> 备选方案必填：只记录真实考虑过的对手方案，先写它最强的理由再否定。没有过的选项不要编。「不做 / 复用现状」仅当当时真的权衡过才写。脚本只检查有没有 `## Alternatives considered`。确实没有真实备选时，保留节标题、正文写「无」即可过检，不要为凑数编造。
 > `implemented` 的 `## Decision` 用现在时；门禁只拒提案标题（`## Proposal` / `## Plan` / `## Migration plan` / `## Acceptance criteria` 及其中文别名）。展开见 `references/note-format.md`。
 
 模板见 `templates/`。
@@ -163,6 +165,8 @@ npm run bundle-board               # 打包内嵌全量数据的自包含 demo.h
 ```
 
 脚本位于本 Skill 的 `scripts/`，从**宿主项目根目录**调用，默认检查当前目录下的 `.agents/notes/`。先根据已加载的 `SKILL.md` 路径确定 Skill 位置，不要假定宿主根目录存在 `scripts/`，也不要切换到 Skill 目录执行。安装不会自动配置宿主的 npm scripts。
+
+写完或改完任何笔记后必须运行验证：有 npm script 用 `npm run verify-notes`，没有就用下方 `npx tsx` 命令——不得以「未配置校验入口」为由跳过。
 
 项目级安装到 `.agents/skills/` 时，可直接执行：
 
