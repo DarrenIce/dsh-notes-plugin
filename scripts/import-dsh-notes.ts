@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'node:child_process';
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, rmdirSync } from 'node:fs';
 import { join, resolve, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -78,7 +78,46 @@ for (const topDoc of ['README.zh.md', 'README.md', 'AGENTS.md']) {
   }
 }
 
-// 自动更新归档 Note 密封清单
+// 清理已在源端被移除或移动的旧 Note
+function cleanTarget(currentDir: string) {
+  if (!existsSync(currentDir)) return;
+  const entries = readdirSync(currentDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const fullPath = join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      cleanTarget(fullPath);
+      try {
+        if (readdirSync(fullPath).length === 0) {
+          rmdirSync(fullPath);
+        }
+      } catch {}
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      const rel = relative(targetNotesDir, fullPath).replace(/\\/g, '/');
+      if (rel === 'README.md' || rel === 'AGENTS.md' || rel === 'archived/AGENTS.md') continue;
+      if (!noteMap.has(rel)) {
+        rmSync(fullPath);
+      }
+    }
+  }
+}
+cleanTarget(targetNotesDir);
+
+// 拷贝 archived/AGENTS.md
+const archivedAgents = join(dshNotesDir, 'archived', 'AGENTS.md');
+if (existsSync(archivedAgents)) {
+  mkdirSync(join(targetNotesDir, 'archived'), { recursive: true });
+  writeFileSync(join(targetNotesDir, 'archived', 'AGENTS.md'), readFileSync(archivedAgents, 'utf8'), 'utf8');
+}
+
+// 重建归档 Note 密封清单：本地笔记经过标准化，与上游原文不同，seal 必须基于本地文件重算
+const localManifest = join(targetNotesDir, 'archived', 'manifest.json');
+if (existsSync(localManifest)) {
+  try {
+    rmSync(localManifest);
+  } catch {}
+}
+
 try {
   execSync('npx tsx skills/write-notes-like-deepseek/scripts/verify-archived-agent-notes.ts --write', { stdio: 'ignore' });
 } catch {}

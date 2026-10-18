@@ -12,7 +12,7 @@ AI 每天都能帮你交十几个 PR，但每个新会话都是一张白纸，�
 npx skills add czm15053/write-notes-like-deepseek
 ```
 
-📺 先看效果：[在线演示看板](https://czm15053.github.io/write-notes-like-deepseek-demo/)（内置 1,196 篇来自 DeepSeek Harness 的真实决策笔记，可脱机浏览）
+📺 先看效果：[在线演示看板](https://czm15053.github.io/write-notes-like-deepseek-demo/)（内置 1,267 篇来自 DeepSeek Harness 的真实决策笔记，可脱机浏览）
 
 ---
 
@@ -267,7 +267,7 @@ npx tsx .agents/skills/write-notes-like-deepseek/scripts/build-board.ts --init b
 npx tsx .agents/skills/write-notes-like-deepseek/scripts/build-board.ts --bundle .agents/notes demo.html "项目决策看板"  # 打包分发
 ```
 
-真实界面（来自内嵌 DeepSeek Harness 1,196 篇真实笔记的[在线演示](https://czm15053.github.io/write-notes-like-deepseek-demo/)）：
+真实界面（来自内嵌 DeepSeek Harness 1,267 篇真实笔记的[在线演示](https://czm15053.github.io/write-notes-like-deepseek-demo/)）：
 
 <p align="center">
   <img src="assets/board-baseline.png" alt="看板真实界面：四组 KPI 总览与「系统承重墙」——按交叉引用权重萃取的最关键决策" width="100%" />
