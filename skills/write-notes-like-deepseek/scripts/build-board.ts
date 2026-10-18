@@ -98,7 +98,7 @@ function parseNoteContent(raw: string, relPath: string, slugToId: Map<string, st
   if (h1Match) title = h1Match[1].trim();
 
   function extractSection(secNamePattern: string) {
-    const re = new RegExp(`^## (?:${secNamePattern})\\s*\\n+([\\s\\S]*?)(?=^## |\\s*$)`, 'm');
+    const re = new RegExp(`^## (?:${secNamePattern})\\s*\\n+([\\s\\S]*?)(?=^## |(?![\\s\\S]))`, 'm');
     const m = re.exec(parseable);
     return m ? m[1].trim() : '';
   }
