@@ -81,9 +81,17 @@ test('built plugin runs in real Cordis Gateway with host registries', async () =
     } });
     await add(await load('@deepseek-ai/dsh-api-gateway/client'));
     const { createDecisionNotesClient, mountDecisionNotesStream } = await import('../../src/contracts/plugin.ts');
-    const client = createDecisionNotesClient(ctx.connection);
+    let client;
+    let clientScope;
+    let streamMount;
+    const consumer = await add({ name: 'contract-client', inject: ['connection', 'remote'], apply(scope) {
+      clientScope = scope;
+      client = createDecisionNotesClient(scope.connection);
+      streamMount = mountDecisionNotesStream(scope);
+    } });
     assert.equal((await client.context('test-session')).workspaceId, 'test-workspace');
-    const mountedStream = await mountDecisionNotesStream(ctx.remote);
+    const mountedStream = await streamMount;
+    assert.throws(() => clientScope.remote.decisionNotes, /without inject/);
     const clientStream = mountedStream.open('test-session');
     const clientIterator = clientStream[Symbol.asyncIterator]();
     assert.equal((await clientIterator.next()).value.type, 'snapshot');
@@ -120,6 +128,8 @@ test('built plugin runs in real Cordis Gateway with host registries', async () =
       new Promise((_, reject) => setTimeout(() => reject(new Error('unload left stream running')), 3000).unref()),
     ])).done, true);
     await closingStream.dispose();
+    await consumer.dispose();
+    assert.throws(() => mountedStream.open('test-session'), /not mounted/);
     await mountedStream.dispose();
     assert.equal(ctx.decisionNotes, undefined);
     assert.equal(await ctx.skills.get('write-notes-like-deepseek'), undefined);

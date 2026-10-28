@@ -2,10 +2,10 @@ import type { WorkspaceContext } from './workspace.js';
 import type { NoteSnapshot, NoteDocument, NotesChange } from './notes.js';
 import type { ValidationResult, ReviewStart } from './validation.js';
 
-/** Mount a single Gateway namespace contribution for the live changes stream. */
-export async function mountDecisionNotesStream(remote: {
-  $mount(contribution: unknown): Promise<() => Promise<void>>;
-  decisionNotes?: { changes(sessionId: string, signal?: AbortSignal): AsyncIterable<NotesChange> & { dispose(): Promise<void> } };
+/** Mount the Gateway contribution and borrow its namespace from an injected scope. */
+export async function mountDecisionNotesStream(ctx: {
+  remote: { $mount(contribution: unknown): Promise<() => Promise<void>> };
+  inject(deps: string[], callback: (scope: { remote: { decisionNotes: { changes(sessionId: string, signal?: AbortSignal): AsyncIterable<NotesChange> & { dispose(): Promise<void> } } } }) => (() => void)): PromiseLike<{ dispose(): Promise<void> }>;
 }) {
   const descriptor = {
     id: 'write-notes-like-deepseek#decisionNotes/changes', service: 'decisionNotes', namespace: 'decisionNotes', method: 'changes', mode: 'stream',
@@ -16,13 +16,24 @@ export async function mountDecisionNotesStream(remote: {
     } }) } }],
     cancellation: { parameter: 'signal' }, result: { mode: 'src-json' },
   };
-  const dispose = await remote.$mount({ package: 'write-notes-like-deepseek', descriptors: [descriptor] });
+  const unmount = await ctx.remote.$mount({ package: 'write-notes-like-deepseek', descriptors: [descriptor] });
+  let namespace: { changes(sessionId: string, signal?: AbortSignal): AsyncIterable<NotesChange> & { dispose(): Promise<void> } } | undefined;
+  let fiber: { dispose(): Promise<void> };
+  try {
+    fiber = await ctx.inject(['remote', 'remote.decisionNotes'], scope => {
+      namespace = scope.remote.decisionNotes;
+      return () => { namespace = undefined; };
+    });
+  } catch (error) {
+    await unmount();
+    throw error;
+  }
   return {
     open(sessionId: string, signal?: AbortSignal) {
-      if (!remote.decisionNotes) throw new Error('Decision notes stream is not mounted');
-      return remote.decisionNotes.changes(sessionId, signal);
+      if (!namespace) throw new Error('Decision notes stream is not mounted');
+      return namespace.changes(sessionId, signal);
     },
-    dispose,
+    async dispose() { await fiber.dispose(); await unmount(); },
   };
 }
 /** Minimal public Connection face; all calls pass through DSH Gateway. */
