@@ -4,7 +4,26 @@
   "private": true,
   "type": "module",
   "description": "像 DeepSeek 团队一样维护项目：把他们在 DeepSeek Harness 里用的那套方法，装进你的仓库",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": ["lib", "assets/write-notes-like-deepseek", "cordis.patch.yml"],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "engines": { "dsh": "0.2.1-rc.2" },
+    "client": { "platform": "web", "inject": ["slots", "connection", "remote"] }
+  },
+  "dependencies": { "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2" },
+  "peerDependencies": { "@deepseek-ai/cordis": "~4.0.5" },
+  "devDependencies": { "esbuild": "^0.25.0", "typescript": "^5.9.3" },
   "scripts": {
+    "build:plugin": "node scripts/build-plugin.mjs",
+    "probe:dsh": "node scripts/probe-dsh-contracts.mjs",
     "verify-agent-note-tree": "npx tsx skills/write-notes-like-deepseek/scripts/verify-agent-note-tree.ts",
     "verify-agent-note-format": "npx tsx skills/write-notes-like-deepseek/scripts/verify-agent-note-format.ts",
     "verify-archived": "npx tsx skills/write-notes-like-deepseek/scripts/verify-archived-agent-notes.ts",

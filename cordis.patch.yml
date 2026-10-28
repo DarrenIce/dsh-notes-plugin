@@ -1,0 +1,3 @@
+- insert:
+    - id: decision-notes
+      name: 'write-notes-like-deepseek'
