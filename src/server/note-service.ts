@@ -100,7 +100,11 @@ export class NotesService {
       if (notesBefore.length > 5000) throw new NotesError('scan-limit','笔记数量超过单次扫描上限。');
       let baselineRaw: string | null = null;
       if (checkout !== 'no-git' && checkout !== 'unknown' && !checkout.startsWith('unborn:')) {
-        try { baselineRaw = (await exec('git',['-C',context.projectRoot,'show',`HEAD:${context.notesPath}/archived/manifest.json`],{timeout:3000,maxBuffer:4*1024*1024,env:{...process.env,LC_ALL:'C'}})).stdout; }
+        try {
+          const options = {timeout:3000,maxBuffer:4*1024*1024,env:{...process.env,LC_ALL:'C'}};
+          const prefix = (await exec('git',['-C',context.projectRoot,'rev-parse','--show-prefix'],options)).stdout.replace(/\r?\n$/, '');
+          baselineRaw = (await exec('git',['-C',context.projectRoot,'show',`HEAD:${prefix}${context.notesPath}/archived/manifest.json`],options)).stdout;
+        }
         catch (error) {
           if (!/does not exist|exists on disk, but not in|does not exist in/.test(String((error as {stderr?:string}).stderr ?? ''))) throw new NotesError('baseline-unavailable','无法读取 Git 归档基线。');
         }

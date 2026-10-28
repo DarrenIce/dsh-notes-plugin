@@ -19,3 +19,18 @@ test('empty and committed Git workspaces without notes remain complete regardles
     await assert.rejects(fs.stat(path.join(root,'.agents/notes')),{code:'ENOENT'});
   }finally{service.dispose();assert.ok(root.startsWith(path.join(os.tmpdir(),'notes-git-context-')));await fs.rm(root,{recursive:true,force:true});}
 });
+test('nested workspaces use their own Git manifest instead of the repository root manifest',async()=>{
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'notes-git-nested-'));
+  const project=path.join(root,'subproject');
+  const service=new NotesService(new WorkspaceResolver({header:async()=>({cwd:project}),workspaces:()=>[]}));
+  const git=(args:string[])=>execFileSync('git',['-C',root,...args],{stdio:'pipe'});
+  try{
+    await fs.mkdir(path.join(root,'.agents/notes/archived'),{recursive:true});
+    await fs.mkdir(path.join(project,'.agents/notes/archived'),{recursive:true});
+    await fs.writeFile(path.join(root,'.agents/notes/archived/manifest.json'),JSON.stringify({version:1,files:{'archived/unrelated.md':'sha256:root-only'}}));
+    await fs.writeFile(path.join(project,'.agents/notes/archived/manifest.json'),JSON.stringify({version:1,files:{}}));
+    git(['init']);git(['add','--','.agents','subproject']);git(['-c','user.name=Notes Test','-c','user.email=notes@example.invalid','commit','-m','separate baselines']);
+    const snapshot=await service.snapshot('s');assert.equal(snapshot.complete,true);assert.equal(snapshot.status,'ready');assert.deepEqual(snapshot.validation.issues,[]);
+    assert.equal(snapshot.notesRoot,path.join(project,'.agents/notes'));
+  }finally{service.dispose();assert.ok(root.startsWith(path.join(os.tmpdir(),'notes-git-nested-')));await fs.rm(root,{recursive:true,force:true});}
+});
