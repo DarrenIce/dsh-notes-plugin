@@ -911,77 +911,44 @@ function parseMarkdown(text) {
   }).join('');
 }
 
-function parseNote(raw, relPath, slugToId = new Map()) {
-  const slug = relPath.split('/').pop().replace(/\.md$/, '');
-  const parts = relPath.split('/');
+// BEGIN SHARED PARSER (generated from scripts/lib/parser.mjs)
+// This file is valid JavaScript so the standalone HTML can embed the same source.
+function resolveNoteLink(id, href) {
+  let target = href.trim().replace(/^<|>$/g, '').split('#')[0];
+  if (!target || /^(?:[a-z][a-z\d+.-]*:|\/)/i.test(target)) return '';
+  const parts = id.split('/').slice(0, -1);
+  for (const part of target.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') { if (!parts.length) return ''; parts.pop(); }
+    else parts.push(part);
+  }
+  return parts.join('/');
+}
+
+function parseNote(raw, id, ids = new Set()) {
+  let fenced = false;
+  const text = raw.replace(/\r\n?/g, '\n').split('\n').map(line => {
+    if (/^\s{0,3}```/.test(line)) { fenced = !fenced; return ''; }
+    return fenced ? '' : line;
+  }).join('\n');
+  const parts = id.split('/');
+  const slug = parts.at(-1).replace(/\.md$/, '');
   const lifecycle = parts[0];
   const cls = parts[1] || 'architecture';
-
-  let title = slug;
-  let status = lifecycle;
-  let date = '';
-
-  const dMatch = /^(\d{4}-\d{2}-\d{2})/.exec(slug);
-  if (dMatch) date = dMatch[1];
-
-  const h1Match = /^# Agent Note[^:：]*[:：]\s*(.*)$/m.exec(raw);
-  if (h1Match) title = h1Match[1].trim();
-
-  function extractSection(pattern) {
-    const re = new RegExp(`^## (?:${pattern})\\s*\\n+([\\s\\S]*?)(?=^## |\\s*$)`, 'm');
-    const m = re.exec(raw);
-    return m ? m[1].trim() : '';
-  }
-
-  const problem = extractSection('Problem|问题');
-  const decision = extractSection('Decision|Proposal|决策|提案');
-  const alternatives = extractSection('Alternatives considered|曾考虑的替代方案|曾考虑的备选');
-  const consequences = extractSection('Consequences|后果');
-
+  const title = /^# Agent Note[^:：]*[:：]\s*(.*)$/m.exec(text)?.[1].trim() || slug;
+  const date = /^(\d{4}-\d{2}-\d{2})/.exec(slug)?.[1] || '';
+  const section = pattern => new RegExp(`^## (?:${pattern})\\s*\\n+([\\s\\S]*?)(?=^## |(?![\\s\\S]))`, 'm').exec(text)?.[1].trim() || '';
   const links = [];
-  for (const m of raw.matchAll(/\]\(([^)]+\.md)\)/g)) {
-    let targetHref = m[1].split('#')[0].trim();
-    if (targetHref.includes('://')) continue;
-    targetHref = targetHref.replace(/\.zh\.md$/, '.md');
-    const segs = `${lifecycle}/${cls}/${targetHref}`.split('/');
-    const resolved = [];
-    for (const s of segs) {
-      if (!s || s === '.') continue;
-      if (s === '..') resolved.pop();
-      else resolved.push(s);
-    }
-    const cleanTarget = resolved.join('/');
-
-    let finalTarget = '';
-    if (slugToId.has(cleanTarget)) {
-      finalTarget = slugToId.get(cleanTarget);
-    } else {
-      const targetSlug = targetHref.split('/').pop().replace(/\.md$/, '');
-      if (slugToId.has(targetSlug)) {
-        finalTarget = slugToId.get(targetSlug);
-      }
-    }
-    if (finalTarget && finalTarget !== relPath) {
-      links.push(finalTarget);
-    }
+  for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
+    const target = resolveNoteLink(id, match[1]);
+    if (target.endsWith('.md') && ids.has(target) && target !== id) links.push(target);
   }
-
-  return {
-    id: relPath,
-    slug,
-    lifecycle,
-    cls,
-    date,
-    title,
-    status,
-    problem,
-    decision,
-    alternatives,
-    consequences,
-    outLinks: [...new Set(links)],
-    rawBody: raw,
-  };
+  return { id, slug, lifecycle, cls, date, title, status: lifecycle,
+    problem: section('Problem|问题'), decision: section('Decision|Proposal|决策|决定|提案'),
+    alternatives: section('Alternatives considered|曾考虑的替代方案|曾考虑的备选'),
+    consequences: section('Consequences|后果'), outLinks: [...new Set(links)], rawBody: raw };
 }
+// END SHARED PARSER
 
 async function scanDirectory(rootHandle) {
   const notesMap = new Map();
@@ -992,16 +959,12 @@ async function scanDirectory(rootHandle) {
       if (entry.kind === 'directory') {
         await walk(entry, subPath);
       } else if (entry.kind === 'file' && entry.name.endsWith('.md')) {
-        const isZh = entry.name.endsWith('.zh.md');
-        const cleanRel = isZh ? subPath.replace(/\.zh\.md$/, '.md') : subPath;
-        const parts = cleanRel.split('/');
+        const parts = subPath.split('/');
         if (parts.length >= 3 && LIFECYCLES.includes(parts[0])) {
           try {
             const file = await entry.getFile();
             const text = await file.text();
-            if (!notesMap.has(cleanRel) || isZh) {
-              notesMap.set(cleanRel, text);
-            }
+            notesMap.set(subPath, text);
           } catch (err) {
             console.warn('Read note error:', subPath, err);
           }
@@ -1018,16 +981,11 @@ async function scanDirectory(rootHandle) {
 
   await walk(targetHandle);
 
-  const slugToId = new Map();
-  for (const rel of notesMap.keys()) {
-    const slug = rel.split('/').pop().replace(/\.md$/, '');
-    slugToId.set(slug, rel);
-    slugToId.set(rel, rel);
-  }
+  const ids = new Set(notesMap.keys());
 
   const notes = [];
   for (const [cleanRel, text] of notesMap.entries()) {
-    notes.push(parseNote(text, cleanRel, slugToId));
+    notes.push(parseNote(text, cleanRel, ids));
   }
   return notes;
 }
@@ -1374,7 +1332,9 @@ function renderDirectory() {
   }).join('') : '<div style="padding:40px;text-align:center;color:var(--text-tertiary);font-family:var(--font-mono);">// 没有匹配的决策记录</div>';
 }
 
+let currentNoteId = "";
 function openConsole(id) {
+  currentNoteId = id;
   const n = Core.byId.get(id);
   if (!n) return;
 
@@ -1455,12 +1415,8 @@ function closeConsole() {
 }
 
 function handleDeepLink(link) {
-  for (const n of Core.nodes) {
-    if (link.includes(n.slug)) {
-      openConsole(n.id);
-      return;
-    }
-  }
+  const id = resolveNoteLink(currentNoteId, link);
+  if (Core.byId.has(id)) openConsole(id);
 }
 
 function routeToListFilter(filterVal) {

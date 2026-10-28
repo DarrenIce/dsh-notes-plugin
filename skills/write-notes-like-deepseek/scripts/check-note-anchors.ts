@@ -8,7 +8,11 @@
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { agentNoteRoot, walkAgentNoteTree } from "./agent-note-tree.ts";
+import { agentNoteRoot as defaultAgentNoteRoot, walkAgentNoteTree } from "./agent-note-tree.ts";
+
+const rootIndex = process.argv.indexOf("--root");
+if (rootIndex >= 0 && !process.argv[rootIndex + 1]) throw new Error("--root requires a path");
+const agentNoteRoot = rootIndex < 0 ? defaultAgentNoteRoot : resolve(process.argv[rootIndex + 1]);
 
 const codeRoot = resolve(process.env.AGENT_NOTE_CODE_ROOT || process.cwd());
 const CODE_EXT = new Set([
@@ -42,6 +46,7 @@ function walk(dir: string, depth: number) {
       if (!SKIP_DIR.has(entry.name)) walk(full, depth + 1);
       continue;
     }
+    if (!entry.isFile()) continue;
     const dot = entry.name.lastIndexOf(".");
     if (dot === -1 || !CODE_EXT.has(entry.name.slice(dot))) continue;
     const rel = full.slice(codeRoot.length + 1);
@@ -69,7 +74,7 @@ function walk(dir: string, depth: number) {
 walk(codeRoot, 0);
 
 // implemented notes with zero inbound anchors
-const { notes } = walkAgentNoteTree();
+const { notes } = walkAgentNoteTree(agentNoteRoot);
 const implemented = notes.filter((n) => n.lifecycle === "implemented");
 // basename -> note count: a slug shared by several notes is ambiguous and
 // must not let one note's anchor count for another.
