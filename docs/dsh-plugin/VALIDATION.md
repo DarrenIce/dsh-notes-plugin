@@ -100,4 +100,14 @@ Git 子目录工作区测试同时放置根目录和子目录不同的 manifest�
 
 ## 8. 最终验收与清理
 
-GPT-6.1-Sol Xhigh 的最终 verdict 与收尾提交待追加。临时 Web profile 接入和认证辅助将在全部真实验证后移除，清理结果在最终提交前核实。源码不包含本机认证信息、临时浏览器状态、测试 fixture 或构建产物；本轮不发布 npm、不推送远端，不做长期部署。
+独立验收最终 **PASS**，open findings 为 `[]`，报告见 [ACCEPTANCE](./ACCEPTANCE.md)。源码验收基准 `822a327`；交付包使用已提交文档基准 `11ec9c7` 的产物，代码与验收基准一致。最后一轮 `notes_validate` 返回完整、issues `[]`、warnings `[]`，校验覆盖最后一次实际笔记修改。
+
+实际 `npm pack` 得到 35 项、约 97.8 kB 压缩包、312.4 kB 解包内容。将该 tarball 安装进当前 profile 后，磁盘包为 profile 内实体，并以该安装目录为 cwd 执行真实宿主模块集成，exit 0；测试中的产品服务端/Skill 产物来自安装包，测试程序和客户端契约助手仍由仓库测试驱动，Session/Workspace/Connection 替身边界不变。
+
+安装器实际提示 missing Cordis peer；目标 DSH 提供的 Cordis 4.0.5 满足 ~4.0.5，提供宿主依赖的组合已通过集成。普通 Node 脱离 DSH 直接加载时仍需自行满足 peer。
+
+本次从源码 link 切换到 tarball 后，现有 GUI 保持功能正常，但主会话与一个新子会话的实际 `notes_context` 仍报告 repo/assets 来源。因此没有把这一步描述为运行中 Host 已切换至 tarball 注册实例，也没有仅凭磁盘安装或 GUI 页签推断后端来源。现有证据不足以确定是会话作用域、HMR 重组还是运行时映射/缓存；不擅自重启正在工作的宿主。独立非源码目录产物加载已验证，后续正式启用或替换来源时须以实际 provider 路径及宿主应用诊断核实。
+
+临时 `write-notes-like-deepseek` 和认证辅助插件均已移除；已核对 Web profile 的依赖与 bundle 列表恢复原有五个外部插件。现有 GUI 仍可认证访问，实际会话的【决策看板】贡献数恢复 0，Skill 目录随卸载消失。临时认证地址、浏览器 cookie 状态和测试环境目录已删除，测试笔记与附件已清理；仅保留交付包、真实截图，以及项目既有忽略规则下的本次架构笔记。
+
+源码与 Git 提交不包含认证信息、临时浏览器状态、测试 fixture 或构建产物；未修改 DSH 宿主，未发布 npm、未推送远端、未保留长期部署。
