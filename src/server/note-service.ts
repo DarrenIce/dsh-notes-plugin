@@ -25,7 +25,14 @@ async function checkoutVersion(root: string): Promise<string> {
     return `${branch}:${head}`;
   } catch (error) {
     const message = String((error as {stderr?:string}).stderr ?? '');
-    return /not a git repository/.test(message) ? 'no-git' : 'unknown';
+    if (/not a git repository/.test(message)) return 'no-git';
+    try {
+      if ((await exec('git',['-C',root,'rev-parse','--is-inside-work-tree'],options)).stdout.trim() === 'true') {
+        const branch = (await exec('git',['-C',root,'symbolic-ref','--quiet','HEAD'],options)).stdout.trim();
+        return `unborn:${branch}`;
+      }
+    } catch { /* distinguish a known empty repository from unavailable Git metadata */ }
+    return 'unknown';
   }
 }
 /** Shared per-root snapshots; every public request rechecks the session's immutable workspace identity. */
@@ -92,8 +99,8 @@ export class NotesService {
       const notesBefore = scanNotes(captured.root).notes as Note[];
       if (notesBefore.length > 5000) throw new NotesError('scan-limit','笔记数量超过单次扫描上限。');
       let baselineRaw: string | null = null;
-      if (checkout !== 'no-git' && checkout !== 'unknown') {
-        try { baselineRaw = (await exec('git',['-C',context.projectRoot,'show',`HEAD:${context.notesPath}/archived/manifest.json`],{timeout:3000,maxBuffer:4*1024*1024})).stdout; }
+      if (checkout !== 'no-git' && checkout !== 'unknown' && !checkout.startsWith('unborn:')) {
+        try { baselineRaw = (await exec('git',['-C',context.projectRoot,'show',`HEAD:${context.notesPath}/archived/manifest.json`],{timeout:3000,maxBuffer:4*1024*1024,env:{...process.env,LC_ALL:'C'}})).stdout; }
         catch (error) {
           if (!/does not exist|exists on disk, but not in|does not exist in/.test(String((error as {stderr?:string}).stderr ?? ''))) throw new NotesError('baseline-unavailable','无法读取 Git 归档基线。');
         }
