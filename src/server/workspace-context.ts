@@ -33,23 +33,30 @@ export async function confinedPath(projectRoot: string, target: string): Promise
   return 'ready';
 }
 export class WorkspaceResolver {
+  private readonly roots = new Map<string,{cwd:string;projectRoot:string}>();
   constructor(readonly host: WorkspaceHost, readonly configuration = new NotesConfiguration()) {}
   async resolve(sessionId: string): Promise<WorkspaceContext> {
     if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 256) throw new NotesError('invalid-session', '无效会话。');
     const header = await this.host.header(sessionId);
     if (!header || !header.cwd || !path.isAbsolute(header.cwd)) throw new NotesError('unknown-session', '会话不存在或没有有效的工作区路径。');
+    const originalRoot = path.resolve(header.cwd);
     const projectRoot = await fs.realpath(header.cwd);
+    const pinned = this.roots.get(sessionId);
+    if (pinned && (pinned.cwd !== header.cwd || pinned.projectRoot !== projectRoot)) throw new NotesError('workspace-mismatch','会话项目根已被替换或重定向。');
     if (!(await fs.stat(projectRoot)).isDirectory()) throw new NotesError('missing-workspace', '工作区目录不可用。');
     const workspaces = this.host.workspaces();
     const memberships = workspaces.filter(workspace => workspace.sessionIds.includes(sessionId));
     if (memberships.length > 1) throw new NotesError('ambiguous-workspace', '会话同时属于多个工作区。');
     let workspace = memberships[0];
-    if (workspace && await fs.realpath(workspace.path) !== projectRoot) throw new NotesError('workspace-mismatch', '会话与登记工作区的路径不一致。');
+    // Workspace.path is the registry's durable canonical identity, not a path to re-realpath.
+    if (workspace && workspace.path !== projectRoot) throw new NotesError('workspace-mismatch', '会话与登记工作区的路径不一致。');
     if (!workspace) {
-      // Registry paths are canonical. Child sessions may not have their own membership row.
+      const byOriginal = workspaces.filter(candidate => candidate.path === originalRoot);
+      if (byOriginal.some(candidate => candidate.path !== projectRoot)) throw new NotesError('workspace-mismatch','登记的项目根已被符号链接重定向。');
       const byRoot = workspaces.filter(candidate => candidate.path === projectRoot);
       if (byRoot.length > 1) throw new NotesError('ambiguous-workspace', '同一项目根对应多个工作区，无法确定笔记配置。');
       workspace = byRoot[0];
+      if (!workspace && originalRoot !== projectRoot) throw new NotesError('workspace-mismatch','未登记会话不能以符号链接作为项目根。');
     }
     const workspaceId = workspace?.id ?? `session-root:${projectRoot}`;
     const notesPath = this.configuration.pathFor(workspaceId);
@@ -57,6 +64,9 @@ export class WorkspaceResolver {
     const notesRoot = path.resolve(projectRoot, notesPath);
     const status = await confinedPath(projectRoot, notesRoot);
     if (this.configuration.revisionFor(workspaceId) !== configRevision) throw new NotesError('stale-config', '解析期间笔记目录配置发生变化，请重试。');
+    const previous = this.roots.get(sessionId);
+    if (previous && (previous.cwd !== header.cwd || previous.projectRoot !== projectRoot)) throw new NotesError('workspace-mismatch','并发解析发现会话项目根不一致。');
+    this.roots.set(sessionId,{cwd:header.cwd,projectRoot});
     return { sessionId, workspaceId, projectRoot, notesRoot, notesPath, status,
       configRevision, capabilities: { read: true, write: false } };
   }
