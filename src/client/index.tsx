@@ -1,16 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createDecisionNotesClient, mountDecisionNotesStream } from '../contracts/plugin';
 import { DecisionBoard, type BoardSnapshot } from './decision-board';
 import { watchBoard, type BoardRemote, type LiveBoardState } from './board-remote';
+import { insertNoteReference, type DraftActions } from './note-reference';
 import css from './board.css';
 
 export const inject = ['slots', 'connection', 'remote'];
 
-function ConnectedBoard(props: { sessionId: string; remote: BoardRemote }) {
+function ConnectedBoard(props: { sessionId: string; remote: BoardRemote; inputActions: DraftActions }) {
   return <ConnectedSession key={props.sessionId} {...props} />;
 }
-function ConnectedSession({ sessionId, remote }: { sessionId: string; remote: BoardRemote }) {
+function ConnectedSession({ sessionId, remote, inputActions }: { sessionId: string; remote: BoardRemote; inputActions: DraftActions }) {
   const [live, setLive] = useState<LiveBoardState>({ status: 'loading' });
+  const [referenceMessage, setReferenceMessage] = useState('');
+  const operation = useRef(0);
+  const alive = useRef(false);
+  const current = useRef(live);
+  current.current = live;
+  useEffect(() => { alive.current = true; return () => { alive.current = false; operation.current++; }; }, []);
   useEffect(() => watchBoard(remote, sessionId, setLive), [remote, sessionId]);
   const snapshot: BoardSnapshot = {
     status: live.status,
@@ -20,7 +27,20 @@ function ConnectedSession({ sessionId, remote }: { sessionId: string; remote: Bo
     complete: live.snapshot?.complete,
     validation: live.snapshot ? (!live.snapshot.validation.complete ? '未完成' : `${live.snapshot.validation.issues.length} 项问题`) : undefined,
   };
-  return <DecisionBoard sessionId={sessionId} snapshot={snapshot} />;
+  return <DecisionBoard sessionId={sessionId} snapshot={snapshot} referenceMessage={referenceMessage} onReference={note => {
+    const state = current.current;
+    const context = state.context;
+    if (!alive.current || state.status !== 'ready' || !context || !state.snapshot?.complete || !state.snapshot.notes.some(item => item.id === note.id)) {
+      setReferenceMessage('笔记状态已变化，请重新打开后重试。'); return;
+    }
+    const identity = { sessionId, configRevision: context.configRevision, operation: ++operation.current };
+    const ok = insertNoteReference(inputActions, identity, () => {
+      const now = current.current;
+      return alive.current && now.status === 'ready' && now.context && now.snapshot?.complete
+        ? { sessionId, configRevision: now.context.configRevision, operation: operation.current } : undefined;
+    }, { title: note.title, notesPath: context.notesPath, id: note.id });
+    setReferenceMessage(ok ? '已加入草稿，请在对话中补充并发送。' : '未能加入草稿；草稿可能已变化或正在提交，请重试。');
+  }} />;
 }
 
 export function apply(ctx: any) {
