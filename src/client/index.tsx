@@ -21,6 +21,7 @@ function ConnectedSession({ sessionId, remote, inputActions }: { sessionId: stri
   const snapshot: BoardSnapshot = {
     status: live.status,
     configRevision: live.context?.configRevision || '',
+    configIdentity: live.context ? JSON.stringify([live.context.workspaceId, live.context.projectRoot, live.context.notesRoot, live.context.configRevision]) : undefined,
     notes: live.snapshot?.notes.map(note => ({ id: note.id, raw: note.rawBody })) || [],
     message: live.message,
     complete: live.snapshot?.complete,
@@ -44,7 +45,7 @@ function ConnectedSession({ sessionId, remote, inputActions }: { sessionId: stri
 
 export function apply(ctx: any) {
   const client = createDecisionNotesClient(ctx.connection);
-  const mounted = mountDecisionNotesStream(ctx.remote);
+  const mounted = mountDecisionNotesStream(ctx);
   const remote: BoardRemote = {
     ...client,
     async *changes(sessionId, signal) {

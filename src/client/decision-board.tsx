@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BoardNote, incomingCounts, makeBoardNotes, NoteSource } from './board-model';
 import { BoardView, getBrowseState, saveBrowseState } from './board-store';
 import { NoteRenderer } from './note-renderer';
@@ -7,6 +7,7 @@ import type { ValidationResult } from '../contracts/validation';
 export interface BoardSnapshot {
   notes: readonly NoteSource[];
   configRevision: string | number;
+  configIdentity?: string;
   status: 'loading' | 'ready' | 'missing' | 'error' | 'offline';
   message?: string;
   validation?: ValidationResult;
@@ -30,33 +31,47 @@ function BoardSession({ sessionId, snapshot, onReference, referenceMessage }: De
   const [state, setState] = useState(() => getBrowseState(sessionId));
   const scrollRef = useRef<HTMLDivElement>(null);
   const readerRef = useRef<HTMLElement>(null);
-  const revision = useRef(snapshot.configRevision);
+  const scrollRestored = useRef(false);
+  const identity = snapshot.status !== 'loading' && snapshot.configRevision !== ''
+    ? snapshot.configIdentity ?? String(snapshot.configRevision) : null;
   useEffect(() => {
-    if (revision.current !== snapshot.configRevision) {
-      revision.current = snapshot.configRevision;
-      setState(old => { const next = { ...old, selected: null, readerScroll: 0 }; saveBrowseState(sessionId, next); return next; });
-    }
-  }, [sessionId, snapshot.configRevision]);
+    if (identity === null) return;
+    setState(old => {
+      if (old.configIdentity === identity) return old;
+      const changed = old.configIdentity !== null;
+      const next = { ...old, configIdentity: identity, ...(changed ? { selected: null, readerScroll: 0 } : {}) };
+      saveBrowseState(sessionId, next);
+      return next;
+    });
+  }, [sessionId, identity]);
   const notes = useMemo(() => makeBoardNotes(snapshot.notes), [snapshot.notes]);
   const byId = useMemo(() => new Map(notes.map(n => [n.id, n])), [notes]);
   const ids = useMemo(() => new Set(byId.keys()), [byId]);
   const counts = useMemo(() => incomingCounts(notes), [notes]);
-  const selected = snapshot.status === 'ready' && snapshot.complete !== false && revision.current === snapshot.configRevision && state.selected && byId.get(state.selected);
+  const identityMatches = identity !== null && (state.configIdentity === null || state.configIdentity === identity);
+  const selected = snapshot.status === 'ready' && snapshot.complete !== false && identityMatches && state.selected && byId.get(state.selected);
   const update = (change: Partial<typeof state>) => setState(old => {
     const next = { ...old, ...change }; saveBrowseState(sessionId, next); return next;
   });
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = state.scroll; }, []);
-  useEffect(() => { if (readerRef.current) readerRef.current.scrollTop = state.readerScroll; }, [state.selected]);
+  useLayoutEffect(() => {
+    scrollRestored.current = false;
+    if (snapshot.status === 'ready' && snapshot.complete !== false && identityMatches && scrollRef.current) {
+      scrollRef.current.scrollTop = state.scroll;
+      scrollRestored.current = true;
+    }
+    return () => { scrollRestored.current = false; };
+  }, [snapshot.status, snapshot.complete, identityMatches]);
+  useLayoutEffect(() => { if (readerRef.current && selected) readerRef.current.scrollTop = state.readerScroll; }, [selected && selected.id]);
   useEffect(() => {
-    if (snapshot.status === 'ready' && snapshot.complete !== false && state.selected && !byId.has(state.selected)) update({ selected: null, readerScroll: 0 });
-  }, [snapshot.status, snapshot.complete, byId, state.selected]);
+    if (snapshot.status === 'ready' && snapshot.complete !== false && identityMatches && state.selected && !byId.has(state.selected)) update({ selected: null, readerScroll: 0 });
+  }, [snapshot.status, snapshot.complete, identityMatches, byId, state.selected]);
   const open = (id: string) => update({ selected: id, readerScroll: 0 });
   const filter = (value: string, category = false) => update({ view: 'directory', query: '', status: category ? '' : value, category: category ? value : '' });
   const query = state.query.trim().toLocaleLowerCase();
   const visible = notes.filter(n => (!state.status || n.lifecycle === state.status) && (!state.category || n.cls === state.category) && (!query || `${n.title} ${n.id} ${n.rawBody}`.toLocaleLowerCase().includes(query)))
     .sort((a, b) => state.sort === 'old' ? a.date.localeCompare(b.date) || a.id.localeCompare(b.id) : state.sort === 'cites' ? (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.id.localeCompare(b.id) : b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
   const card = (n: BoardNote) => <button key={n.id} className="dnb-card" onClick={() => open(n.id)}><strong>{n.title}</strong><span>{name(categoryNames, n.cls)} · {name(statusNames, n.lifecycle)} · {n.date || '无日期'} · 引用 {counts.get(n.id) || 0}</span><small>{(n.decision || n.problem).slice(0, 180)}</small></button>;
-  return <div className="dnb" ref={scrollRef} onScroll={e => update({ scroll: e.currentTarget.scrollTop })}>
+  return <div className="dnb" ref={scrollRef} onScroll={e => { if (scrollRestored.current && snapshot.status === 'ready' && snapshot.complete !== false && identityMatches) update({ scroll: e.currentTarget.scrollTop }); }}>
     <header className="dnb-header"><strong>工程决策看板 <small>{notes.length} 项</small></strong><nav aria-label="看板视图">{tabs.map(([id, label]) => <button key={id} aria-pressed={state.view === id} onClick={() => update({ view: id })}>{label}</button>)}</nav><input aria-label="搜索笔记" placeholder="搜索决策与避坑" value={state.query} onChange={e => update({ query: e.target.value, view: 'directory' })} /></header>
     <main className="dnb-main">
       <div className="dnb-state" role="status">{snapshot.status === 'loading' ? '正在加载笔记…' : snapshot.status === 'missing' ? '笔记目录尚不存在' : snapshot.status === 'offline' ? '连接已断开，等待重新连接' : snapshot.status === 'error' ? `读取失败：${snapshot.message || '请重试'}` : snapshot.complete === false ? '快照不完整，显示可用数据' : '已同步'}{snapshot.validation && ` · 校验：${snapshot.validation.complete ? `${snapshot.validation.issues.length} 项问题` : '未完成'}`}</div>
