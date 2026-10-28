@@ -46,9 +46,11 @@ export class WorkspaceResolver {
     if (workspace && await fs.realpath(workspace.path) !== projectRoot) throw new NotesError('workspace-mismatch', '会话与登记工作区的路径不一致。');
     const workspaceId = workspace?.id ?? `session-root:${projectRoot}`;
     const notesPath = this.configuration.pathFor(workspaceId);
+    const configRevision = this.configuration.revisionFor(workspaceId);
     const notesRoot = path.resolve(projectRoot, notesPath);
     const status = await confinedPath(projectRoot, notesRoot);
+    if (this.configuration.revisionFor(workspaceId) !== configRevision) throw new NotesError('stale-config', '解析期间笔记目录配置发生变化，请重试。');
     return { sessionId, workspaceId, projectRoot, notesRoot, notesPath, status,
-      configRevision: this.configuration.revisionFor(workspaceId), capabilities: { read: true, write: false } };
+      configRevision, capabilities: { read: true, write: false } };
   }
 }
