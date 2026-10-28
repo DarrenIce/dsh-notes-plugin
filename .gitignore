@@ -12,3 +12,8 @@ demo.html
 
 # 本地生成的轻量看板
 /board.html
+
+# DSH 插件构建产物与发布检查包
+/lib/
+/assets/write-notes-like-deepseek/
+/*.tgz
