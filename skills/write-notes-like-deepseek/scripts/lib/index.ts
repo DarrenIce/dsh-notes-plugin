@@ -2,7 +2,8 @@ import { readNote, listFiles } from './fs.ts';
 import { parseNote } from './parser.mjs';
 import { validateTree } from './validate-tree.ts';
 import { validateFormat } from './format.ts';
-import { validateArchive } from './validate-archive.ts';
+import { validateArchive, type ArchiveBaseline } from './validate-archive.ts';
+export type { ArchiveBaseline } from './validate-archive.ts';
 export { readNote, safePath } from './fs.ts';
 export { parseNote, resolveNoteLink } from './parser.mjs';
 export { archiveNote, withSealMutex } from './archive.ts';
@@ -17,7 +18,7 @@ export function scanNotes(root: string) {
   const notes = [...ids].map(id => parseNote(readNote(root, id), id, ids));
   return { notes };
 }
-export function validateNotes(root: string, options: { baseRef?: string } = {}) {
+export function validateNotes(root: string, options: { baseRef?: string; archiveBaseline?: ArchiveBaseline } = {}) {
   const errors: string[] = [];
   const warnings: string[] = [];
   let complete = true;

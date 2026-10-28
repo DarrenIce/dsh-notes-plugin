@@ -12,8 +12,10 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { safePath } from "./fs.ts";
 
+export interface ArchiveBaseline { raw: string | null; ref: string; warnings?: string[] }
+
 /** When write is true, the caller must hold withSealMutex for this root. */
-export function validateArchive(agentNoteRoot: string, options: { write?: boolean; baseRef?: string } = {}) {
+export function validateArchive(agentNoteRoot: string, options: { write?: boolean; baseRef?: string; archiveBaseline?: ArchiveBaseline } = {}) {
 const isWrite = options.write ?? false;
 const errors: string[] = [];
 const warnings: string[] = [];
@@ -82,37 +84,42 @@ for (const key of Object.keys(manifest.files)) {
   if (!existsSync(safePath(agentNoteRoot, key))) fail(`${key} — sealed entry has no file on disk`);
 }
 
-// --- append-only vs git baseline (skipped without git)
-const repoRoot = (() => {
-  try {
-    return execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: agentNoteRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
-  } catch {
-    return null;
-  }
-})();
-if (repoRoot) {
-  const baseRef = options.baseRef || "HEAD";
-  const manifestRel = relative(repoRoot, manifestPath).split("\\").join("/");
-  let baselineRaw: string | null = null;
-  try {
-    baselineRaw = execFileSync("git", ["show", `${baseRef}:${manifestRel}`], { cwd: repoRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
-  } catch {
-    // manifest absent at baseline — nothing to compare
-  }
-  if (baselineRaw !== null) {
-    try {
-      const baseline = JSON.parse(baselineRaw) as Manifest;
-      for (const [key, seal] of Object.entries(baseline.files ?? {})) {
-        if (manifest.files[key] !== seal) {
-          fail(`${key} — seal added/changed/removed relative to ${baseRef}; archived seals are append-only`);
-        }
-      }
-    } catch {
-      fail(`archived/manifest.json at ${baseRef} was not valid JSON`);
-    }
-  }
+// --- append-only vs the supplied baseline, or the legacy git baseline
+let baselineRaw: string | null = null;
+const baseRef = options.archiveBaseline?.ref ?? (options.baseRef || "HEAD");
+if (options.archiveBaseline !== undefined) {
+  baselineRaw = options.archiveBaseline.raw;
+  warnings.push(...(options.archiveBaseline.warnings ?? []));
 } else {
-  warnings.push("not a git repository — append-only check skipped (seal hashes still verified against disk)");
+  const repoRoot = (() => {
+    try {
+      return execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: agentNoteRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    } catch {
+      return null;
+    }
+  })();
+  if (repoRoot) {
+    const manifestRel = relative(repoRoot, manifestPath).split("\\").join("/");
+    try {
+      baselineRaw = execFileSync("git", ["show", `${baseRef}:${manifestRel}`], { cwd: repoRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+    } catch {
+      // manifest absent at baseline — nothing to compare
+    }
+  } else {
+    warnings.push("not a git repository — append-only check skipped (seal hashes still verified against disk)");
+  }
+}
+if (baselineRaw !== null) {
+  try {
+    const baseline = JSON.parse(baselineRaw) as Manifest;
+    for (const [key, seal] of Object.entries(baseline.files ?? {})) {
+      if (manifest.files[key] !== seal) {
+        fail(`${key} — seal added/changed/removed relative to ${baseRef}; archived seals are append-only`);
+      }
+    }
+  } catch {
+    fail(`archived/manifest.json at ${baseRef} was not valid JSON`);
+  }
 }
 
 if (!errors.length && isWrite && existsSync(archivedDir)) {

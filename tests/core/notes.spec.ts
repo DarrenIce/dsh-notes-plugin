@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { archiveNote, parseNote, readNote, scanNotes, validateNotes } from '../../skills/write-notes-like-deepseek/scripts/lib/index.ts';
+import { archiveNote, parseNote, readNote, scanNotes, validateArchive, validateNotes } from '../../skills/write-notes-like-deepseek/scripts/lib/index.ts';
 
 const tmp = mkdtempSync(join(tmpdir(), 'notes-core-'));
 try {
@@ -90,6 +90,21 @@ try {
   writeFileSync(join(root, 'archived/manifest.json'), JSON.stringify(manifest));
   const baselineIssues = validateNotes(root).issues;
   assert.ok(baselineIssues.some(issue => issue.rule === 'archived.seal-baseline'));
+  const mirror = join(tmp, 'mirror');
+  mkdirSync(mirror);
+  cpSync(join(root, 'archived'), join(mirror, 'archived'), { recursive: true });
+  const baselineRaw = JSON.stringify(afterConcurrent);
+  const supplied = validateNotes(mirror, { archiveBaseline: { raw: baselineRaw, ref: 'captured-commit', warnings: ['captured warning'] } });
+  assert.ok(supplied.issues.some(issue => issue.rule === 'archived.seal-baseline' && issue.message.includes('captured-commit')));
+  assert.deepEqual(supplied.warnings, ['captured warning']);
+  const noBaseline = validateArchive(root, { archiveBaseline: { raw: null, ref: 'no-manifest' } });
+  assert.equal(noBaseline.errors.some(error => error.includes('append-only')), false, 'explicit null must suppress local git lookup');
+  assert.deepEqual(noBaseline.warnings, []);
+  const badBaseline = validateArchive(mirror, { archiveBaseline: { raw: '{', ref: 'bad-ref' } });
+  assert.ok(badBaseline.errors.some(error => error.includes('at bad-ref was not valid JSON')));
+  const goodBaseline = validateArchive(mirror, { archiveBaseline: { raw: JSON.stringify(manifest), ref: 'matching' } });
+  assert.equal(goodBaseline.errors.some(error => error.includes('append-only')), false);
+  assert.deepEqual(goodBaseline.warnings, []);
   assert.equal(JSON.parse(readFileSync(join(root, 'archived/manifest.json'), 'utf8')).files['archived/process/2026-10-01-a.md'], undefined);
   console.log('ok: isolated roots, parser, symlink boundary, read-only checks, concurrent archive and git baseline');
 } finally { rmSync(tmp, { recursive: true, force: true }); }
