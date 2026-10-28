@@ -25,7 +25,7 @@ function ConnectedSession({ sessionId, remote, inputActions }: { sessionId: stri
     notes: live.snapshot?.notes.map(note => ({ id: note.id, raw: note.rawBody })) || [],
     message: live.message,
     complete: live.snapshot?.complete,
-    validation: live.snapshot ? (!live.snapshot.validation.complete ? '未完成' : `${live.snapshot.validation.issues.length} 项问题`) : undefined,
+    validation: live.snapshot?.validation,
   };
   return <DecisionBoard sessionId={sessionId} snapshot={snapshot} referenceMessage={referenceMessage} onReference={note => {
     const state = current.current;

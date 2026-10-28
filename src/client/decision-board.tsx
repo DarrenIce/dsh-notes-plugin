@@ -2,13 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BoardNote, incomingCounts, makeBoardNotes, NoteSource } from './board-model';
 import { BoardView, getBrowseState, saveBrowseState } from './board-store';
 import { NoteRenderer } from './note-renderer';
+import type { ValidationResult } from '../contracts/validation';
 
 export interface BoardSnapshot {
   notes: readonly NoteSource[];
   configRevision: string | number;
   status: 'loading' | 'ready' | 'missing' | 'error' | 'offline';
   message?: string;
-  validation?: string;
+  validation?: ValidationResult;
   complete?: boolean;
 }
 export interface DecisionBoardProps {
@@ -58,7 +59,11 @@ function BoardSession({ sessionId, snapshot, onReference, referenceMessage }: De
   return <div className="dnb" ref={scrollRef} onScroll={e => update({ scroll: e.currentTarget.scrollTop })}>
     <header className="dnb-header"><strong>工程决策看板 <small>{notes.length} 项</small></strong><nav aria-label="看板视图">{tabs.map(([id, label]) => <button key={id} aria-pressed={state.view === id} onClick={() => update({ view: id })}>{label}</button>)}</nav><input aria-label="搜索笔记" placeholder="搜索决策与避坑" value={state.query} onChange={e => update({ query: e.target.value, view: 'directory' })} /></header>
     <main className="dnb-main">
-      <div className="dnb-state" role="status">{snapshot.status === 'loading' ? '正在加载笔记…' : snapshot.status === 'missing' ? '笔记目录尚不存在' : snapshot.status === 'offline' ? '连接已断开，等待重新连接' : snapshot.status === 'error' ? `读取失败：${snapshot.message || '请重试'}` : snapshot.complete === false ? '快照不完整，显示可用数据' : '已同步'}{snapshot.validation && ` · 校验：${snapshot.validation}`}</div>
+      <div className="dnb-state" role="status">{snapshot.status === 'loading' ? '正在加载笔记…' : snapshot.status === 'missing' ? '笔记目录尚不存在' : snapshot.status === 'offline' ? '连接已断开，等待重新连接' : snapshot.status === 'error' ? `读取失败：${snapshot.message || '请重试'}` : snapshot.complete === false ? '快照不完整，显示可用数据' : '已同步'}{snapshot.validation && ` · 校验：${snapshot.validation.complete ? `${snapshot.validation.issues.length} 项问题` : '未完成'}`}</div>
+      {snapshot.validation && <details className="dnb-panel"><summary>校验详情（{snapshot.validation.complete ? `${snapshot.validation.issues.length} 项问题` : '结果不完整'}）</summary>{(['introduced', 'historical', 'uncertain'] as const).map(group => {
+        const issues = snapshot.validation!.issues.filter(issue => issue.attribution === group);
+        return <section key={group}><h3>{({ introduced: '本次引入', historical: '历史已有', uncertain: '来源不确定' })[group]}（{issues.length}）</h3>{issues.map((issue, index) => <div className="dnb-issue" key={`${issue.key}:${index}`}><strong>{issue.rule}</strong> · {issue.path || '项目'}<p>{issue.message}</p></div>)}</section>;
+      })}{snapshot.validation.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>}
       {snapshot.status === 'ready' && !notes.length && <div className="dnb-panel">暂无决策笔记。</div>}
       {state.view === 'overview' && <><div className="dnb-kpis">{[['implemented', '现行落地'], ['proposed', '待评审提案'], ['rejected', '避坑否决'], ['simplification', '化简裁撤']].map(([key, label]) => <button key={key} onClick={() => filter(key, key === 'simplification')}><span>{label}</span><strong>{notes.filter(n => key === 'simplification' ? n.cls === key : n.lifecycle === key).length}</strong></button>)}</div><section className="dnb-panel"><h2>系统承重墙</h2><p>按关联引用展示现行决策</p><div className="dnb-grid">{notes.filter(n => n.lifecycle === 'implemented').sort((a,b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0)).slice(0,6).map(card)}</div></section><section className="dnb-panel"><h2>领域架构分类</h2><div className="dnb-grid">{Object.entries(categoryNames).map(([category, label]) => <div className="dnb-category" key={category}><h3>{label}</h3>{notes.filter(n => n.cls === category && ['implemented', 'proposed'].includes(n.lifecycle)).map(card)}</div>)}</div></section></>}
       {state.view === 'timeline' && <section className="dnb-panel"><h2>技术演进时间线</h2><div className="dnb-controls"><label>月份 <select value={state.month} onChange={e => update({ month: e.target.value })}><option value="">全部</option>{Array.from(new Set(notes.filter(n => n.date).map(n => n.date.slice(0,7)))).map(m => <option key={m}>{m}</option>)}</select></label><label>分类 <select value={state.timelineCategory} onChange={e => update({ timelineCategory: e.target.value })}><option value="">全部</option>{Object.entries(categoryNames).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label><button onClick={() => update({ month: '', timelineCategory: '' })}>重置</button></div><div className="dnb-timeline">{notes.filter(n => n.date && (!state.month || n.date.startsWith(state.month)) && (!state.timelineCategory || n.cls === state.timelineCategory)).map(card)}</div></section>}
