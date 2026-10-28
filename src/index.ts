@@ -11,7 +11,7 @@ export const inject = ['sessions', 'workspaceRegistry', 'typert', 'remoteAccess'
 const resources = { session: (sessionId: string) => sessionId };
 
 class DecisionNotesRemote extends TypertRemoteService {
-  constructor(ctx: any, readonly service: NotesService, readonly resolver: WorkspaceResolver) { super(ctx, 'decisionNotes'); }
+  constructor(ctx: any, readonly service: NotesService, readonly resolver: WorkspaceResolver, readonly lifetime: AbortSignal) { super(ctx, 'decisionNotes'); }
   @Remote({ resources })
   async context(sessionId: string, signal: AbortSignal) { signal.throwIfAborted(); return this.resolver.resolve(sessionId); }
   @Remote({ resources })
@@ -24,6 +24,7 @@ class DecisionNotesRemote extends TypertRemoteService {
   async beginReview(sessionId: string, signal: AbortSignal) { signal.throwIfAborted(); return this.service.beginReview(sessionId); }
   @Remote({ mode: 'stream', resources })
   async *changes(sessionId: string, signal: AbortSignal): AsyncGenerator<NotesChange> {
+    signal = AbortSignal.any([signal, this.lifetime]);
     signal.throwIfAborted();
     let wake: (() => void) | undefined;
     let queued: NotesChange | undefined;
@@ -32,7 +33,10 @@ class DecisionNotesRemote extends TypertRemoteService {
     signal.addEventListener('abort', onAbort, { once: true });
     let unsubscribe: (() => void) | undefined;
     try {
-      unsubscribe = await this.service.subscribe(sessionId, event => { queued = event; notify(); });
+      unsubscribe = await this.service.subscribe(sessionId, event => {
+        if (queued?.type !== 'invalidated' && (event.type !== 'snapshot' || queued?.type !== 'error')) queued = event;
+        notify();
+      });
       while (!signal.aborted) {
         if (queued) {
           const event = queued; queued = undefined;
@@ -59,7 +63,8 @@ export function apply(ctx: any, config: NotesConfig = {}) {
     workspaces: () => ctx.workspaceRegistry.list(),
   }, configuration);
   const service = new NotesService(resolver);
-  new DecisionNotesRemote(ctx, service, resolver);
+  const lifetime = new AbortController();
+  ctx.effect(() => () => { lifetime.abort(); service.dispose(); }, 'decision-notes.service');
+  new DecisionNotesRemote(ctx, service, resolver, lifetime.signal);
   installNoteAgent(ctx, service, resolver, { skillRoot: fileURLToPath(new URL('../assets/write-notes-like-deepseek/', import.meta.url)) });
-  ctx.effect(() => () => service.dispose(), 'decision-notes.service');
 }

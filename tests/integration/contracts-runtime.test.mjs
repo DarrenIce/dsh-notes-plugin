@@ -111,8 +111,16 @@ test('built plugin runs in real Cordis Gateway with host registries', async () =
     ]), /Session access revoked/);
     restrictedAbort.abort();
     await restrictedIterator.return();
-    await mountedStream.dispose();
+    const closingStream = mountedStream.open('test-session');
+    const closingIterator = closingStream[Symbol.asyncIterator]();
+    assert.equal((await closingIterator.next()).value.type, 'snapshot');
     await mounted.dispose();
+    assert.equal((await Promise.race([
+      closingIterator.next(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('unload left stream running')), 3000).unref()),
+    ])).done, true);
+    await closingStream.dispose();
+    await mountedStream.dispose();
     assert.equal(ctx.decisionNotes, undefined);
     assert.equal(await ctx.skills.get('write-notes-like-deepseek'), undefined);
     assert.ok(!ctx.tools.schemas().some(tool => tool.name === 'notes_context'));
