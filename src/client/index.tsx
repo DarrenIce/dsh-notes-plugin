@@ -16,9 +16,8 @@ function ConnectedSession({ sessionId, remote, inputActions }: { sessionId: stri
   const operation = useRef(0);
   const alive = useRef(false);
   const current = useRef(live);
-  current.current = live;
   useEffect(() => { alive.current = true; return () => { alive.current = false; operation.current++; }; }, []);
-  useEffect(() => watchBoard(remote, sessionId, setLive), [remote, sessionId]);
+  useEffect(() => watchBoard(remote, sessionId, next => { current.current = next; setLive(next); }), [remote, sessionId]);
   const snapshot: BoardSnapshot = {
     status: live.status,
     configRevision: live.context?.configRevision || '',
