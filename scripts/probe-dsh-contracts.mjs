@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url'
 import { resolve, join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 
-const root = resolve(process.env.DSH_ROOT ?? '/home/darren/.nvm/versions/node/v24.18.0/lib/node_modules/@deepseek-ai/dsh')
+import { dshTestRoot } from './dsh-test-host.mjs'
+const root = dshTestRoot()
 const requireHost = createRequire(join(root, 'package.json'))
 const load = async name => import(pathToFileURL(requireHost.resolve(name)).href)
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))

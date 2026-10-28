@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url';
 import { mkdtemp, rm, cp, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
-const root = resolve(process.env.DSH_ROOT ?? '/home/darren/.nvm/versions/node/v24.18.0/lib/node_modules/@deepseek-ai/dsh');
+import { dshTestRoot } from '../../scripts/dsh-test-host.mjs';
+const root = dshTestRoot();
 const hostRequire = createRequire(join(root, 'package.json'));
 const load = async name => import(pathToFileURL(hostRequire.resolve(name)).href);
 

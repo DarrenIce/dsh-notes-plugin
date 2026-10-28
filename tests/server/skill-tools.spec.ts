@@ -7,7 +7,8 @@ import { installNoteAgent } from '../../src/server/note-tools.ts';
 import { agentCompatibility } from '../../src/server/agent-feedback.ts';
 import { NOTE_SECTION } from '../../src/server/prompt-policy.ts';
 
-const root = process.env.DSH_ROOT ?? '/home/darren/.nvm/versions/node/v24.18.0/lib/node_modules/@deepseek-ai/dsh';
+import { dshTestRoot } from '../../scripts/dsh-test-host.mjs';
+const root = dshTestRoot();
 const requireHost = createRequire(path.join(root, 'package.json'));
 const load = (name: string) => import(pathToFileURL(requireHost.resolve(name)).href);
 
