@@ -7,7 +7,7 @@ import { installNoteAgent } from './server/note-tools.js';
 import type { NotesChange } from './contracts/notes.js';
 
 export const name = 'decision-notes';
-export const inject = ['sessions', 'workspaceRegistry', 'typert', 'skills', 'systemPrompt', 'tools', 'workingDirectory'];
+export const inject = ['sessions', 'workspaceRegistry', 'typert', 'remoteAccess', 'skills', 'systemPrompt', 'tools', 'workingDirectory'];
 const resources = { session: (sessionId: string) => sessionId };
 
 class DecisionNotesRemote extends TypertRemoteService {
@@ -34,7 +34,11 @@ class DecisionNotesRemote extends TypertRemoteService {
     try {
       unsubscribe = await this.service.subscribe(sessionId, event => { queued = event; notify(); });
       while (!signal.aborted) {
-        if (queued) { const event = queued; queued = undefined; yield event; continue; }
+        if (queued) {
+          const event = queued; queued = undefined;
+          if (!this.ctx.remoteAccess.allows({ kind: 'session', id: sessionId })) throw new Error('Session access revoked');
+          yield event; continue;
+        }
         await new Promise<void>(resolve => { wake = resolve; if (signal.aborted || queued) notify(); });
       }
     } finally {

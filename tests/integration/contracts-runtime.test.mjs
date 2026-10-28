@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { mkdtemp, rm, cp, mkdir, symlink } from 'node:fs/promises';
+import { mkdtemp, rm, cp, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 const root = resolve(process.env.DSH_ROOT ?? '/home/darren/.nvm/versions/node/v24.18.0/lib/node_modules/@deepseek-ai/dsh');
@@ -40,7 +40,8 @@ test('built plugin runs in real Cordis Gateway with host registries', async () =
     const context = await ctx.typertGateway.invoke(request('context', { sessionId: 'test-session' }));
     assert.equal(context.workspaceId, 'test-workspace');
     assert.equal(context.status, 'missing');
-    ctx.remoteAccess.registerPolicy('contract-reader', { bindings: () => [{ resource: { kind: 'session', id: 'test-session' }, role: { name: 'reader', resource: 'session', actions: ['decisionNotes/context'] } }] });
+    let grant = true;
+    ctx.remoteAccess.registerPolicy('contract-reader', { bindings: () => grant ? [{ resource: { kind: 'session', id: 'test-session' }, role: { name: 'reader', resource: 'session', actions: ['decisionNotes/context', 'decisionNotes/changes'] } }] : [] });
     const restricted = { ...peer, principal: { kind: 'contract-reader' } };
     assert.equal((await ctx.typertGateway.invoke({ ...request('context', { sessionId: 'test-session' }), peer: restricted })).workspaceId, 'test-workspace');
     await assert.rejects(ctx.typertGateway.invoke({ ...request('context', { sessionId: 'unknown' }), peer: restricted }), error => error.code === 'remote-access/denied');
@@ -56,6 +57,52 @@ test('built plugin runs in real Cordis Gateway with host registries', async () =
     assert.equal((await iterator.next()).value.type, 'snapshot');
     abort.abort();
     await iterator.return();
+    await add({ name: 'test-connection', apply(scope) {
+      scope.provide('connection', { interactions: 'none', isLoopback: true, generation: { getSnapshot: () => undefined, subscribe: () => () => {} }, rpc: {
+        async call(_channel, endpoint, payload, signal) {
+          const [namespace, method] = endpoint.split('/');
+          try { return { ok: true, value: await ctx.typertGateway.invoke({ namespace, method, args: payload.args, peer, signal }) }; }
+          catch (error) { return { ok: false, error: { code: error.code ?? 'internal', message: error.message } }; }
+        },
+        async *open(_channel, endpoint, payload, signal) {
+          const [namespace, method] = endpoint.split('/');
+          yield* await ctx.typertGateway.stream({ namespace, method, args: payload.args, peer, signal });
+        },
+      } });
+    } });
+    await add(await load('@deepseek-ai/dsh-api-gateway/client'));
+    const { createDecisionNotesClient, mountDecisionNotesStream } = await import('../../src/contracts/plugin.ts');
+    const client = createDecisionNotesClient(ctx.connection);
+    assert.equal((await client.context('test-session')).workspaceId, 'test-workspace');
+    const mountedStream = await mountDecisionNotesStream(ctx.remote);
+    const clientStream = mountedStream.open('test-session');
+    const clientIterator = clientStream[Symbol.asyncIterator]();
+    assert.equal((await clientIterator.next()).value.type, 'snapshot');
+    const notesDirectory = join(project, '.agents/notes/implemented/architecture');
+    await mkdir(notesDirectory, { recursive: true });
+    await writeFile(join(notesDirectory, '2026-01-01-contract.md'), '# Contract test\n\n## 决策\n\n测试变更。\n');
+    const observed = await Promise.race([
+      (async () => { for (;;) { const item = await clientIterator.next(); if (item.done) throw new Error('stream ended'); if (item.value.type === 'snapshot' && item.value.snapshot.notes.length) return item.value; } })(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('watch timeout')), 8000).unref()),
+    ]);
+    assert.equal(observed.snapshot.notes[0].id, 'implemented/architecture/2026-01-01-contract.md');
+    await clientStream.dispose();
+    const reopened = mountedStream.open('test-session');
+    assert.equal((await reopened[Symbol.asyncIterator]().next()).value.snapshot.notes.length, 1);
+    await reopened.dispose();
+    const restrictedAbort = new AbortController();
+    const restrictedStream = await ctx.typertGateway.stream({ ...request('changes', { sessionId: 'test-session' }, restrictedAbort.signal), peer: restricted });
+    const restrictedIterator = restrictedStream[Symbol.asyncIterator]();
+    assert.equal((await restrictedIterator.next()).value.type, 'snapshot');
+    grant = false;
+    await writeFile(join(notesDirectory, '2026-01-01-contract.md'), '# Changed after revocation\n');
+    await assert.rejects(Promise.race([
+      restrictedIterator.next(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('watch timeout')), 8000).unref()),
+    ]), /Session access revoked/);
+    restrictedAbort.abort();
+    await restrictedIterator.return();
+    await mountedStream.dispose();
     await mounted.dispose();
     assert.equal(ctx.decisionNotes, undefined);
     assert.equal(await ctx.skills.get('write-notes-like-deepseek'), undefined);
