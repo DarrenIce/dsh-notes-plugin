@@ -1,5 +1,5 @@
 /* Scoped to the conversation view; host theme tokens provide light/dark colors. */
-.dnb { color: var(--dsw-alias-label-primary, CanvasText); background: var(--dsw-alias-bg-base, Canvas); font: 14px/1.55 system-ui, sans-serif; height: 100%; min-height: 0; overflow: auto; position: relative; }
+.dnb { color: var(--dsw-alias-label-primary, CanvasText); background: var(--dsw-alias-bg-base, Canvas); font: 14px/1.55 system-ui, sans-serif; height: 100%; min-height: 0; overflow: auto; position: relative; contain: paint; }
 .dnb * { box-sizing: border-box; }
 .dnb button, .dnb input, .dnb select { font: inherit; color: inherit; }
 .dnb button { cursor: pointer; }
