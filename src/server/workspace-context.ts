@@ -40,10 +40,17 @@ export class WorkspaceResolver {
     if (!header || !header.cwd || !path.isAbsolute(header.cwd)) throw new NotesError('unknown-session', '会话不存在或没有有效的工作区路径。');
     const projectRoot = await fs.realpath(header.cwd);
     if (!(await fs.stat(projectRoot)).isDirectory()) throw new NotesError('missing-workspace', '工作区目录不可用。');
-    const memberships = this.host.workspaces().filter(workspace => workspace.sessionIds.includes(sessionId));
+    const workspaces = this.host.workspaces();
+    const memberships = workspaces.filter(workspace => workspace.sessionIds.includes(sessionId));
     if (memberships.length > 1) throw new NotesError('ambiguous-workspace', '会话同时属于多个工作区。');
-    const workspace = memberships[0];
+    let workspace = memberships[0];
     if (workspace && await fs.realpath(workspace.path) !== projectRoot) throw new NotesError('workspace-mismatch', '会话与登记工作区的路径不一致。');
+    if (!workspace) {
+      // Registry paths are canonical. Child sessions may not have their own membership row.
+      const byRoot = workspaces.filter(candidate => candidate.path === projectRoot);
+      if (byRoot.length > 1) throw new NotesError('ambiguous-workspace', '同一项目根对应多个工作区，无法确定笔记配置。');
+      workspace = byRoot[0];
+    }
     const workspaceId = workspace?.id ?? `session-root:${projectRoot}`;
     const notesPath = this.configuration.pathFor(workspaceId);
     const configRevision = this.configuration.revisionFor(workspaceId);
