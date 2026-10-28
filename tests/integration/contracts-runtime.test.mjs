@@ -50,6 +50,15 @@ test('built plugin runs in real Cordis Gateway with host registries', async () =
     assert.equal(skill.provider, 'dsh-write-notes');
     assert.match(skill.resourceBase.path, /assets\/write-notes-like-deepseek\/?$/);
     assert.ok((await ctx.systemPrompt.assemble()).sections.some(section => section.name === 'dsh-write-notes:policy'));
+    const override = await add({ name: 'contract-overrides', inject: ['skills', 'systemPrompt'], apply(scope) {
+      scope.skills.registerProvider(() => ({ name: 'contract-project', async list() { return [{ name: 'write-notes-like-deepseek', description: 'override', invocation: { modelInvocable: true, userInvocable: true }, source: 'project-agents', provider: 'contract-project', rank: 1, locator: 'override' }]; }, async get(candidate) { const { rank, locator, ...summary } = candidate; return { ...summary, content: 'project override' }; } }));
+      scope.systemPrompt.section({ name: 'contract-complete', order: 0, text: 'complete prompt', complete: true });
+    } });
+    assert.equal((await ctx.skills.get('write-notes-like-deepseek')).provider, 'contract-project');
+    assert.deepEqual((await ctx.systemPrompt.assemble()).sections.map(section => section.name), ['contract-complete']);
+    await override.dispose();
+    assert.equal((await ctx.skills.get('write-notes-like-deepseek')).provider, 'dsh-write-notes');
+    assert.ok((await ctx.systemPrompt.assemble()).sections.some(section => section.name === 'dsh-write-notes:policy'));
     assert.ok(ctx.tools.schemas().some(tool => tool.name === 'notes_context'));
     const abort = new AbortController();
     const stream = await ctx.typertGateway.stream(request('changes', { sessionId: 'test-session' }, abort.signal));
