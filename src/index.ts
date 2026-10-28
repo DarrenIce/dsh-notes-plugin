@@ -40,7 +40,8 @@ class DecisionNotesRemote extends TypertRemoteService {
       while (!signal.aborted) {
         if (queued) {
           const event = queued; queued = undefined;
-          if (!this.ctx.remoteAccess.allows({ kind: 'session', id: sessionId })) throw new Error('Session access revoked');
+          const access = (this.ctx as typeof this.ctx & { remoteAccess: { allows(resource: { kind: 'session'; id: string }): boolean } }).remoteAccess;
+          if (!access.allows({ kind: 'session', id: sessionId })) throw new Error('Session access revoked');
           yield event; continue;
         }
         await new Promise<void>(resolve => { wake = resolve; if (signal.aborted || queued) notify(); });

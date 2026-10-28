@@ -11,19 +11,55 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": ["lib", "assets/write-notes-like-deepseek", "cordis.patch.yml"],
+  "files": [
+    "lib",
+    "assets/write-notes-like-deepseek",
+    "cordis.patch.yml"
+  ],
   "dsh": {
     "manifestVersion": 1,
-    "bundle": { "patch": "./cordis.patch.yml" },
-    "engines": { "dsh": "0.2.1-rc.2" },
-    "client": { "platform": "web", "inject": ["slots", "connection", "remote"] }
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "engines": {
+      "dsh": "0.2.1-rc.2"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots",
+        "connection",
+        "remote"
+      ]
+    }
   },
-  "dependencies": { "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2" },
-  "peerDependencies": { "@deepseek-ai/cordis": "~4.0.5" },
-  "devDependencies": { "esbuild": "^0.25.0", "typescript": "^5.9.3" },
+  "dependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.1.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  },
   "scripts": {
     "build:plugin": "node scripts/build-plugin.mjs",
     "probe:dsh": "node scripts/probe-dsh-contracts.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:core": "tsx --test tests/core/*.spec.ts",
+    "test:server": "tsx --test tests/server/*.spec.ts",
+    "test:client": "tsx --test tests/client/*.test.ts tests/client/*.test.tsx",
+    "test:integration": "npm run build:plugin && node --test tests/integration/contracts*.test.mjs",
+    "test": "npm run typecheck && npm run test:core && npm run test:server && npm run test:client && npm run test:integration && npm run test-skill-install",
     "verify-agent-note-tree": "npx tsx skills/write-notes-like-deepseek/scripts/verify-agent-note-tree.ts",
     "verify-agent-note-format": "npx tsx skills/write-notes-like-deepseek/scripts/verify-agent-note-format.ts",
     "verify-archived": "npx tsx skills/write-notes-like-deepseek/scripts/verify-archived-agent-notes.ts",
