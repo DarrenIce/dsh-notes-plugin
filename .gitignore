@@ -1,6 +1,10 @@
 node_modules/
 .DS_Store
 docs/
+# 只将 DSH 插件规划目录纳入版本控制
+!/docs/
+/docs/*
+!/docs/dsh-plugin/
 # 本 skill 的 self-dogfood 笔记不随包发布
 .agents/notes/
 # 7.8MB 脱机内联数据产物不纳入版本库
