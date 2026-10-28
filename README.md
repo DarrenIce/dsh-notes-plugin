@@ -12,6 +12,43 @@ AI 每天都能帮你交十几个 PR，但每个新会话都是一张白纸，�
 npx skills add czm15053/write-notes-like-deepseek
 ```
 
+## DSH 插件：一次启用覆盖各工作区
+
+项目同时提供 DSH 插件。在 Web profile 启用一次后，兼容会话自动发现集中 Skill 与简短规则；【对话】【轨迹】旁新增【决策看板】，按所属项目读取实时笔记。无需向每个项目复制 Skill，也不要求配置项目 npm scripts。空白会话的页签显示时机沿用宿主行为。
+
+当前验证环境是 **Linux、Node 24、DSH `0.2.1-rc.2` Web profile**。安全捕获使用 Linux 目录句柄；其他平台和外部 agent 后端尚未验证。本包尚未发布 npm，可从本地构建安装：
+
+```sh
+npm ci
+npm run build:plugin
+# 测试需要目标 DSH 0.2.1-rc.2 已安装；自定义位置请替换 DSH_ROOT
+DSH_ROOT="$(npm root -g)/@deepseek-ai/dsh" npm test
+# 使用当前仓库的绝对路径；启用后刷新现有 DSH 页面
+dsh plugin --profile web add link:/absolute/path/write-notes-like-deepseek
+```
+
+也可运行 `npm pack`，再用 `dsh plugin --profile web add /absolute/path/write-notes-like-deepseek-0.1.0.tgz` 安装完整产物。通过 Web 侧边栏插件管理页停用或移除；CLI 为 `dsh plugin --profile web remove write-notes-like-deepseek`。不需要启动另一个 Web 服务器。
+
+默认笔记根为项目内 `.agents/notes/`。浏览和校验不会创建目录；首次授权写入时才创建。调用 `notes_context` 查看实际根、工作区 ID、集中资源和实际 Skill 来源。在 Web profile 的 patch 层配置目录覆盖：
+
+```yaml
+- id: decision-notes
+  name: write-notes-like-deepseek
+  config:
+    workspaceOverrides:
+      "<workspace-id>":
+        notesPath: docs/decisions
+    pollIntervalMs: 1500
+```
+
+覆盖值必须是工作区内相对目录，改配置不迁移文件。不同工作区/worktree 隔离，同根会话共享数据，各自保留浏览状态。看板包含总览、时间线、避坑、目录、搜索筛选、关联和全文阅读；外部编辑、删除和重连自动同步。“加入当前会话”只准备引用草稿，保留原文字和附件，由用户发送。
+
+DSH 适配正文使相关笔记维护跟随任务授权，不为每篇笔记另加确认门。agent 调用 `notes_begin_review` 建立检查区间，收尾携带 token 调用 `notes_validate` 获取最新完整校验。普通文件工具缺少可靠作者证据时，新问题保守报告来源不确定，不自动归责。归档入口由 agent 自身受权限约束的命令工具执行，宿主不代写。
+
+项目/preset 的同名 Skill 可遮蔽插件，完整自定义 prompt 可排除短规则，工具诊断会展示当前实际状态。看板只读，不重写封印。安全捕获上限为单文件 4 MiB、总量 32 MiB、10,000 条目、32 层目录、5,000 篇笔记，超限返回明确不完整状态。
+
+详见 [实现方案](docs/dsh-plugin/IMPLEMENT.md)、[任务与提交](docs/dsh-plugin/TODO.md) 和 [运行验证](docs/dsh-plugin/VALIDATION.md)。通用 Skill、CLI、复制/软链安装及独立 HTML 看板继续可用。
+
 📺 先看效果：[在线演示看板](https://czm15053.github.io/write-notes-like-deepseek-demo/)（内置 1,267 篇来自 DeepSeek Harness 的真实决策笔记，可脱机浏览）
 
 ---
