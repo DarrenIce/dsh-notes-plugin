@@ -33,7 +33,7 @@ for (const note of notes) {
     }
 
     // Strip anchor fragment if present
-    const fileTarget = rawTarget.split("#")[0];
+    const fileTarget = rawTarget.split("#")[0].replace(/\\/g, '/');
     if (!fileTarget) continue;
 
     const resolvedTarget = resolve(dirname(noteFullPath), fileTarget);

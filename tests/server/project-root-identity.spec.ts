@@ -5,9 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import {WorkspaceResolver} from '../../src/server/workspace-context.js';
 import {NotesService} from '../../src/server/note-service.js';
+import {linuxOnly} from './linux-only.ts';
 const note=(title:string)=>`# Agent Note: ${title}\n\nStatus: implemented\n\n## Problem\n项目边界。\n\n## Decision\n固定项目身份。\n\n## Alternatives considered\n无\n\n## Consequences\n拒绝目录重定向。\n`;
 async function project(root:string,title:string){const directory=path.join(root,'.agents/notes/implemented/architecture');await fs.mkdir(directory,{recursive:true});await fs.writeFile(path.join(directory,'2026-10-28-project.md'),note(title));}
-test('registered parent and child sessions cannot rebind after their project root becomes an outside symlink',async()=>{
+test('registered parent and child sessions cannot rebind after their project root becomes an outside symlink',linuxOnly,async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'notes-project-id-'));
  const inside=path.join(root,'project'),outside=path.join(root,'outside');await project(inside,'inside');await project(outside,'outside-secret');
  const host={header:async()=>({cwd:inside}),workspaces:()=>[{id:'w',path:inside,sessionIds:['parent']}]};

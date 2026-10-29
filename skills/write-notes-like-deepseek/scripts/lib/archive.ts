@@ -83,14 +83,17 @@ export async function archiveNote(root: string, target: string, options: { succe
         successorRel = relative(root, successorPath).replace(/\\/g, '/');
         const successorParts = successorRel.split('/');
         if (successorParts.length !== 3 || !['proposed', 'implemented', 'rejected'].includes(successorParts[0])) throw new Error(`--superseded-by target must be an active note in {lifecycle}/{class}/ (got: ${successorRel})`);
-        if (successorPath === targetPath) throw new Error('--superseded-by target must differ from the archived note');
+        if (sameFile(successorPath, targetPath)) throw new Error('--superseded-by target must differ from the archived note');
       }
-      const lines = readFileSync(targetPath, 'utf8').split('\n');
+      const text = readFileSync(targetPath, 'utf8');
+      const eol = text.includes('\r\n') ? '\r\n' : '\n';
+      const lines = text.split(/\r?\n/);
       const status = lines.indexOf('Status: implemented');
       if (status < 0) throw new Error('note must contain `Status: implemented` to be archived');
       const now = options.date || new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
-      if (!lines.some(line => line.startsWith('Archived:'))) lines.splice(status + 1, 0, `Archived: ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
+      const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const archivedText = lines.some(line => line.startsWith('Archived:')) ? text : text.replace(/(^|\n)Status: implemented(\r?\n|$)/, (_match, prefix, ending) => `${prefix}Status: implemented${ending || eol}Archived: ${stamp}${ending}`);
       const title = (lines[0] || '').replace(/^# Agent Note[:：] ?/, '').trim() || basename(filename, '.md');
       const archivedId = `archived/${cls}/${filename}`;
       const dest = safePath(root, archivedId);
@@ -101,16 +104,9 @@ export async function archiveNote(root: string, target: string, options: { succe
         try { manifest = JSON.parse(readFileSync(manifestPath, 'utf8')); }
         catch { warnings.push('existing manifest.json was invalid, creating fresh'); }
       }
-      mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(targetPath, lines.join('\n'), 'utf8');
-      renameSync(targetPath, dest);
-      logs.push(`Moved: ${rel} -> ${archivedId}`);
-      const hash = `sha256:${createHash('sha256').update(readFileSync(dest)).digest('hex')}`;
-      manifest.files[archivedId] = hash;
-      writeFileSync(manifestPath, JSON.stringify({ version: 1, files: Object.fromEntries(Object.entries(manifest.files).sort(([a], [b]) => a.localeCompare(b))) }, null, 2) + '\n');
-      logs.push(`Sealed in archived/manifest.json with hash ${hash.slice(0, 16)}...`);
       const inbound: string[] = [];
       for (const note of walkAgentNoteTree(root).notes) {
+        if (note.rel === rel) continue;
         const file = safePath(root, note.rel);
         const text = readFileSync(file, 'utf8');
         for (const match of text.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)) {
@@ -120,6 +116,14 @@ export async function archiveNote(root: string, target: string, options: { succe
           if (ref && safeCompare(dirname(file), ref, targetPath)) { inbound.push(note.rel); break; }
         }
       }
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(targetPath, archivedText, 'utf8');
+      renameSync(targetPath, dest);
+      logs.push(`Moved: ${rel} -> ${archivedId}`);
+      const hash = `sha256:${createHash('sha256').update(readFileSync(dest)).digest('hex')}`;
+      manifest.files[archivedId] = hash;
+      writeFileSync(manifestPath, JSON.stringify({ version: 1, files: Object.fromEntries(Object.entries(manifest.files).sort(([a], [b]) => a.localeCompare(b))) }, null, 2) + '\n');
+      logs.push(`Sealed in archived/manifest.json with hash ${hash.slice(0, 16)}...`);
       if (successorPath && successorRel) {
         const link = relative(dirname(successorPath), dest).replace(/\\/g, '/');
         const text = readFileSync(successorPath, 'utf8');
@@ -135,4 +139,14 @@ export async function archiveNote(root: string, target: string, options: { succe
   }).catch(error => ({ ok: false as const, inbound: [] as string[], logs: [] as string[], warnings: [] as string[], errors: [error instanceof Error ? error.message : String(error)] }));
 }
 import { resolve } from 'node:path';
-function safeCompare(dir: string, target: string, expected: string) { return resolve(dir, target) === expected; }
+function sameFile(first: string, second: string) {
+  const a = statSync(first, { bigint: true });
+  const b = statSync(second, { bigint: true });
+  return a.dev === b.dev && a.ino === b.ino;
+}
+function safeCompare(dir: string, target: string, expected: string) {
+  const full = resolve(dir, target);
+  if (full === expected) return true;
+  try { return sameFile(full, expected); }
+  catch { return false; }
+}

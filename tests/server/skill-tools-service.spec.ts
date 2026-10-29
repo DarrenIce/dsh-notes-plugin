@@ -7,8 +7,9 @@ import { NotesConfiguration } from '../../src/server/config.ts';
 import { WorkspaceResolver } from '../../src/server/workspace-context.ts';
 import { NotesService } from '../../src/server/note-service.ts';
 import { installNoteAgent } from '../../src/server/note-tools.ts';
+import { linuxOnly } from './linux-only.ts';
 
-test('notes tools bind real service to overridden root and fresh explicit review', async () => {
+test('notes tools bind real service to overridden root and fresh explicit review', linuxOnly, async () => {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'notes-agent-tools-'));
   const id = 'implemented/architecture/2026-10-01-test.md';
   const note = '# Agent Note: 测试\n\nStatus: implemented\n\n## Problem\n问题\n\n## Decision\n选择\n\n## Alternatives considered\n无\n\n## Consequences\n后果\n';
