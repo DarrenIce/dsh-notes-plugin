@@ -5,23 +5,27 @@ import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mkdtemp, rm, cp, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { dshTestRoot } from '../../scripts/dsh-test-host.mjs';
-const root = dshTestRoot();
-const hostRequire = createRequire(join(root, 'package.json'));
+// Both secured capture backends must satisfy the real host contract.
+const skip = ['linux','win32'].includes(process.platform) ? false : 'secured note capture currently supports Linux and Windows';
+const root = skip ? undefined : dshTestRoot();
+const hostRequire = skip ? undefined : createRequire(join(root, 'package.json'));
 const load = async name => import(pathToFileURL(hostRequire.resolve(name)).href);
 
-test('built plugin runs in real Cordis Gateway with host registries', async () => {
+test('built plugin runs in real Cordis Gateway with host registries', { skip }, async () => {
   const [{ Context }, { default: Typert }, { default: Access }, { default: Gateway }, { default: Skills }, { default: Prompt }, { default: Tools }] = await Promise.all([
     load('@deepseek-ai/cordis'), load('@deepseek-ai/dsh-typert-registry'), load('@deepseek-ai/dsh-api-remote-access'), load('@deepseek-ai/dsh-api-gateway'), load('@deepseek-ai/dsh-skill'), load('@deepseek-ai/dsh-system-prompt'), load('@deepseek-ai/dsh-tools'),
   ]);
   const project = await mkdtemp(join(tmpdir(), 'dsh-notes-contract-'));
-  const staging = join(project, 'package');
-  await mkdir(staging);
+  const staging = join(project, 'node_modules', 'write-notes-like-deepseek');
+  await mkdir(staging,{recursive:true});
   for (const item of ['lib', 'assets/write-notes-like-deepseek', 'package.json', 'cordis.patch.yml']) {
     await cp(resolve(item), join(staging, item), { recursive: true });
   }
-  await symlink(join(root, 'node_modules'), join(staging, 'node_modules'), 'dir');
+  await symlink(join(root, 'node_modules'), join(staging, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
   const plugin = await import(pathToFileURL(join(staging, 'lib/index.js')).href);
   const ctx = new Context();
   const fibers = [];
@@ -108,6 +112,17 @@ test('built plugin runs in real Cordis Gateway with host registries', async () =
     const reopened = mountedStream.open('test-session');
     assert.equal((await reopened[Symbol.asyncIterator]().next()).value.snapshot.notes.length, 1);
     await reopened.dispose();
+    const archiveId = 'implemented/architecture/2026-01-02-archive.md';
+    await writeFile(join(project,'.agents/notes',archiveId),'# Agent Note: Package archive\r\n\r\nStatus: implemented\r\n\r\n## Problem\r\nPackage CLI.\r\n\r\n## Decision\r\nUse JavaScript.\r\n\r\n## Alternatives considered\r\nTypeScript in node_modules.\r\n\r\n## Consequences\r\nRuns on Node.\r\n');
+    const archiveTool = await ctx.tools.execute({callId:'installed-archive',name:'notes_archive_entry',arguments:{id:archiveId},agent:{id:'test-session'},signal:controller.signal});
+    assert.ok(!archiveTool.isError,JSON.stringify(archiveTool.error));
+    const entry = JSON.parse(archiveTool.value);
+    assert.equal(entry.argv[0],join(staging,'lib/archive-cli.mjs'));
+    const archiveRun = await promisify(execFile)(entry.executable,entry.argv,{encoding:'utf8',timeout:10000});
+    assert.match(archiveRun.stdout,/Sealed in archived\/manifest.json/);
+    const archivedSnapshot = await ctx.typertGateway.invoke(request('snapshot',{sessionId:'test-session'}));
+    assert.equal(archivedSnapshot.complete,true);
+    assert.ok(archivedSnapshot.notes.some(note=>note.id==='archived/architecture/2026-01-02-archive.md'));
     const restrictedAbort = new AbortController();
     const restrictedStream = await ctx.typertGateway.stream({ ...request('changes', { sessionId: 'test-session' }, restrictedAbort.signal), peer: restricted });
     const restrictedIterator = restrictedStream[Symbol.asyncIterator]();

@@ -6,7 +6,8 @@ import path from 'node:path';
 import os from 'node:os';
 import {NotesService} from '../../src/server/note-service.js';
 import {WorkspaceResolver} from '../../src/server/workspace-context.js';
-test('empty and committed Git workspaces without notes remain complete regardless of locale',async()=>{
+import {linuxOnly} from './linux-only.ts';
+test('empty and committed Git workspaces without notes remain complete regardless of locale',linuxOnly,async()=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'notes-git-context-'));
   const service=new NotesService(new WorkspaceResolver({header:async()=>({cwd:root}),workspaces:()=>[]}));
   const git=(args:string[])=>execFileSync('git',['-C',root,...args],{stdio:'pipe',env:{...process.env,LC_ALL:'zh_CN.UTF-8'}});
@@ -19,7 +20,7 @@ test('empty and committed Git workspaces without notes remain complete regardles
     await assert.rejects(fs.stat(path.join(root,'.agents/notes')),{code:'ENOENT'});
   }finally{service.dispose();assert.ok(root.startsWith(path.join(os.tmpdir(),'notes-git-context-')));await fs.rm(root,{recursive:true,force:true});}
 });
-test('nested workspaces use their own Git manifest instead of the repository root manifest',async()=>{
+test('nested workspaces use their own Git manifest instead of the repository root manifest',linuxOnly,async()=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'notes-git-nested-'));
   const project=path.join(root,'subproject');
   const service=new NotesService(new WorkspaceResolver({header:async()=>({cwd:project}),workspaces:()=>[]}));

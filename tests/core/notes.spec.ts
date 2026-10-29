@@ -2,9 +2,14 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { archiveNote, parseNote, readNote, scanNotes, validateArchive, validateNotes } from '../../skills/write-notes-like-deepseek/scripts/lib/index.ts';
+
+// Run the repository's tsx CLI directly: a bare `npx` is a .cmd shim on Windows that Node cannot spawn
+// without a shell, and `npx -y tsx` would also need the network because the CLI calls below use cwd=tmp.
+const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
 
 const tmp = mkdtempSync(join(tmpdir(), 'notes-core-'));
 try {
@@ -43,7 +48,7 @@ try {
   assert.throws(() => readNote(root, '../secret.md'), /escapes/);
   assert.equal(validateNotes(root).issues.length, 0);
   const formatCli = fileURLToPath(new URL('../../skills/write-notes-like-deepseek/scripts/verify-agent-note-format.ts', import.meta.url));
-  const cli = () => spawnSync('npx', ['-y', 'tsx', formatCli, '--root', root], { cwd: tmp, encoding: 'utf8' });
+  const cli = () => spawnSync(process.execPath, [tsxCli, formatCli, '--root', root], { cwd: tmp, encoding: 'utf8' });
   assert.equal(cli().status, 0);
   writeFileSync(join(root, a), note('A').replace('Status: implemented', 'Status: proposed'));
   assert.equal(cli().status, 1);
@@ -61,7 +66,7 @@ try {
   writeFileSync(join(root, 'archived/.seal.lock'), '99999999:0:dead');
   const archiveCli = fileURLToPath(new URL('../../skills/write-notes-like-deepseek/scripts/archive-agent-note.ts', import.meta.url));
   const runArchive = (id: string) => new Promise<void>((resolve, reject) => {
-    const child = spawn('npx', ['-y', 'tsx', archiveCli, join(root, id), '--root', root], { cwd: tmp, stdio: 'pipe' });
+    const child = spawn(process.execPath, [tsxCli, archiveCli, join(root, id), '--root', root], { cwd: tmp, stdio: 'pipe' });
     let output = '';
     child.stdout.on('data', chunk => output += chunk);
     child.stderr.on('data', chunk => output += chunk);
@@ -70,7 +75,7 @@ try {
   });
   const sealCli = fileURLToPath(new URL('../../skills/write-notes-like-deepseek/scripts/verify-archived-agent-notes.ts', import.meta.url));
   const seal = new Promise<void>((resolve, reject) => {
-    const child = spawn('npx', ['-y', 'tsx', sealCli, '--write', '--root', root], { cwd: tmp, stdio: 'pipe' });
+    const child = spawn(process.execPath, [tsxCli, sealCli, '--write', '--root', root], { cwd: tmp, stdio: 'pipe' });
     let output = '';
     child.stdout.on('data', chunk => output += chunk);
     child.stderr.on('data', chunk => output += chunk);

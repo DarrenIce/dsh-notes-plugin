@@ -4,15 +4,17 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpath
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { npmCliPath } from './npm-cli.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const npxCli = npmCliPath('npx');
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'notes-skill-install-')));
 const env = { ...process.env, DISABLE_TELEMETRY: '1' };
 delete env.AGENT_NOTE_ROOT;
 delete env.AGENT_NOTE_ARCHIVE_BASE_REF;
 
 function run(cwd, args, success = true) {
-  const result = spawnSync('npx', ['--yes', ...args], { cwd, env, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [npxCli, '--yes', ...args], { cwd, env, encoding: 'utf8' });
   if (result.error) throw result.error;
   assert.equal(result.status === 0, success, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
   return result.stdout;

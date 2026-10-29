@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { closeSync, constants, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -5,9 +8,54 @@ import os from 'node:os';
 import { NotesError, type WorkspaceContext } from '../contracts/workspace.js';
 
 export interface CapturedNotes { root: string; fingerprint: string; status: 'ready'|'missing'; dispose(): void }
-/** Linux directory descriptors anchor every component, including ancestors of the project root. */
-export function captureNotes(context: WorkspaceContext, materialize = true): CapturedNotes {
-  if (process.platform !== 'linux') throw new NotesError('unsupported-platform','当前安全快照实现需要 Linux 的目录句柄接口。');
+function temporaryCapture(materialize: boolean) {
+  const temporary = materialize ? mkdtempSync(path.join(os.tmpdir(),'dsh-notes-capture-')) : '';
+  const dispose = () => {
+    if (!temporary) return;
+    if (path.dirname(temporary) !== os.tmpdir() || !path.basename(temporary).startsWith('dsh-notes-capture-')) throw new Error('invalid capture directory');
+    rmSync(temporary,{recursive:true,force:true});
+  };
+  return {temporary,dispose};
+}
+const exec = promisify(execFile);
+async function captureWindows(context: WorkspaceContext, materialize: boolean): Promise<CapturedNotes> {
+  const {temporary,dispose} = temporaryCapture(materialize);
+  try {
+    const executable = path.join(process.env.SystemRoot ?? 'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
+    let output: string;
+    try {
+      const child = exec(executable,['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',fileURLToPath(new URL('./windows-capture.ps1',import.meta.url))],{
+        encoding:'utf8',timeout:30000,maxBuffer:48*1024*1024,windowsHide:true,
+      });
+      child.child.stdin!.on('error',()=>{}); // A startup failure is reported by the process promise.
+      child.child.stdin!.end(JSON.stringify({projectRoot:context.projectRoot,notesPath:context.notesPath}));
+      output = (await child).stdout;
+    } catch (error) {
+      const detail = String((error as {stderr?:unknown}).stderr ?? (error as Error).message).trim();
+      throw new NotesError('windows-capture-failed',`Windows 安全捕获失败（需要系统 PowerShell 与 Add-Type）：${detail}`);
+    }
+    const result = JSON.parse(output) as {status:'ready'|'missing';entries:{id:string;content:string|null}[]};
+    if (!['ready','missing'].includes(result.status) || !Array.isArray(result.entries) || result.entries.length > 10000) throw new NotesError('invalid-capture','Windows 捕获返回无效结果。');
+    const digest = createHash('sha256');
+    if (result.status === 'missing') digest.update('missing');
+    for (const entry of result.entries.sort((a,b)=>a.id.localeCompare(b.id))) {
+      if (!entry.id || entry.id.split('/').some(part=>!part || part==='.' || part==='..' || /[\\\\:\u0000]/.test(part))) throw new NotesError('invalid-capture','Windows 捕获返回无效路径。');
+      if (entry.content === null) {
+        digest.update(`directory:${entry.id}\0`);
+        if (temporary) mkdirSync(path.join(temporary,entry.id),{recursive:true});
+      } else {
+        const content = Buffer.from(entry.content,'base64');
+        digest.update(`file:${entry.id}\0`); digest.update(content);
+        if (temporary) writeFileSync(path.join(temporary,entry.id),content,{flag:'wx'});
+      }
+    }
+    return {root:temporary,fingerprint:digest.digest('hex'),status:result.status,dispose};
+  } catch (error) { dispose(); throw error; }
+}
+/** Use platform-specific pinned handles; never downgrade to check-then-open path reads. */
+export async function captureNotes(context: WorkspaceContext, materialize = true): Promise<CapturedNotes> {
+  if (process.platform === 'win32') return captureWindows(context,materialize);
+  if (process.platform !== 'linux') throw new NotesError('unsupported-platform','安全快照当前支持 Linux 与 Windows。');
   const temporary = materialize ? mkdtempSync(path.join(os.tmpdir(),'dsh-notes-capture-')) : '';
   const digest = createHash('sha256'); const handles = new Set<number>();
   let count=0,bytes=0,status:CapturedNotes['status']='ready';

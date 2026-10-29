@@ -89,11 +89,11 @@ export class NotesService {
     let notes: Note[] = []; let core: ReturnType<typeof validateNotes>;
     let status: NoteSnapshot['status'] = 'ready'; let message: string | undefined;
     const checkout = await checkoutVersion(context.projectRoot);
-    let captured: ReturnType<typeof captureNotes> | undefined;
+    let captured: Awaited<ReturnType<typeof captureNotes>> | undefined;
     let fingerprint = '';
     try {
       await confinedPath(context.projectRoot,context.notesRoot);
-      captured = captureNotes(context);
+      captured = await captureNotes(context);
       fingerprint = captured.fingerprint;
       status = captured.status;
       const notesBefore = scanNotes(captured.root).notes as Note[];
@@ -112,7 +112,7 @@ export class NotesService {
       core = validateNotes(captured.root,{archiveBaseline:{raw:baselineRaw,ref:'HEAD',warnings:checkout==='no-git'?['not a git repository — append-only check skipped (seal hashes still verified against disk)']:[]}});
       notes = notesBefore;
       const finalCheckout = await checkoutVersion(context.projectRoot);
-      const finalCapture = captureNotes(context,false);
+      const finalCapture = await captureNotes(context,false);
       let stable: boolean;
       try { stable = fingerprint === finalCapture.fingerprint && checkout === finalCheckout; }
       finally { finalCapture.dispose(); }

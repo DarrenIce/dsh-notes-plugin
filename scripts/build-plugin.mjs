@@ -15,6 +15,12 @@ await build({
   bundle: true, platform: 'node', format: 'esm', target: 'node22',
   packages: 'external', sourcemap: false,
 })
+await build({
+  absWorkingDir: root, entryPoints: ['skills/write-notes-like-deepseek/scripts/archive-agent-note.ts'], outfile: 'lib/archive-cli.mjs',
+  bundle: true, platform: 'node', format: 'esm', target: 'node22',
+  packages: 'external', sourcemap: false,
+})
+await cp(resolve(root, 'src/server/windows-capture.ps1'), resolve(out, 'windows-capture.ps1'))
 const client = await build({
   absWorkingDir: root, entryPoints: ['src/client/index.tsx'], write: false,
   bundle: true, platform: 'browser', format: 'cjs', target: 'es2022',

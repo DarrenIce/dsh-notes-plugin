@@ -97,7 +97,7 @@ export function installNoteAgent(ctx: any, service: NoteAgentService, resolver: 
       const successor = args.successor === undefined ? undefined : noteId(requireString(args, 'successor'));
       if (successor?.startsWith('archived/')) throw new Error('successor must be active');
       const context = await resolver.resolve(sid);
-      const argv = [path.join(resources.skillRoot, 'scripts', 'archive-agent-note.ts'), path.join(context.notesRoot, id), '--root', context.notesRoot];
+      const argv = [path.resolve(resources.skillRoot, '..', '..', 'lib', 'archive-cli.mjs'), path.join(context.notesRoot, id), '--root', context.notesRoot];
       if (successor) argv.push('--superseded-by', path.join(context.notesRoot, successor));
       return { context, executable: process.execPath, argv, guidance: '只在当前 agent 的权限允许时，通过原有命令工具执行；随后检查入站链接并重新校验。' };
     });

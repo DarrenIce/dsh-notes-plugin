@@ -1,6 +1,6 @@
 // This file is valid JavaScript so the standalone HTML can embed the same source.
 export function resolveNoteLink(id, href) {
-  let target = href.trim().replace(/^<|>$/g, '').split('#')[0];
+  let target = href.trim().replace(/^<|>$/g, '').split('#')[0].replace(/\\/g, '/');
   if (!target || /^(?:[a-z][a-z\d+.-]*:|\/)/i.test(target)) return '';
   const parts = id.split('/').slice(0, -1);
   for (const part of target.split('/')) {

@@ -7,9 +7,10 @@ import {NotesConfiguration} from '../../src/server/config.js';
 import {WorkspaceResolver} from '../../src/server/workspace-context.js';
 import {NotesService} from '../../src/server/note-service.js';
 import type {NotesChange} from '../../src/contracts/notes.js';
+import {linuxOnly} from './linux-only.ts';
 const body = (title:string) => `# Agent Note: ${title}\n\nStatus: implemented\n\n## Problem\n需要记录项目决策。\n\n## Decision\n使用已授权工作区作为边界。\n\n## Alternatives considered\n无\n\n## Consequences\n读取不创建目录。\n`;
 async function until(check:()=>boolean,timeout=5000){const start=Date.now();while(!check()){if(Date.now()-start>timeout)throw new Error('snapshot wait timed out');await new Promise(resolve=>setTimeout(resolve,25));}}
-test('shared stream observes creation, recursive edits, moves, removal and recreation', async()=>{
+test('shared stream observes creation, recursive edits, moves, removal and recreation', linuxOnly, async()=>{
   const root = await fs.mkdtemp(path.join(os.tmpdir(),'notes-live-'));
   const config = new NotesConfiguration({pollIntervalMs:250});
   const resolver = new WorkspaceResolver({header:async()=>({cwd:root}),workspaces:()=>[{id:'w',path:root,sessionIds:['a','b']}]},config);
@@ -41,7 +42,7 @@ test('shared stream observes creation, recursive edits, moves, removal and recre
     assert.equal(service.diagnostics.watchers,0);
   }finally{service.dispose();assert.deepEqual(service.diagnostics,{entries:0,watchers:0,consumers:0});assert.ok(root.startsWith(path.join(os.tmpdir(),'notes-live-')));await fs.rm(root,{recursive:true,force:true});}
 });
-test('fresh queries are isolated and reject untrusted paths and revoked memberships',async()=>{
+test('fresh queries are isolated and reject untrusted paths and revoked memberships', linuxOnly, async()=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'notes-isolated-'));
   const a=path.join(root,'a'),b=path.join(root,'b');await fs.mkdir(a);await fs.mkdir(b);
   let valid=true;
