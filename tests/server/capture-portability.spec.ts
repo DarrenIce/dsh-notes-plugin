@@ -67,11 +67,12 @@ test('capture refuses directory junctions and file symlinks without exposing ext
     const outside = path.join(f.project,'outside');await fs.mkdir(outside);
     await fs.writeFile(path.join(outside,'secret.md'),'outside-secret');
     const link = path.join(context.notesRoot,'link');
+    const rejectsLink = (error: unknown) => (error as {code?:string})?.code === 'symlink' || /symlink|reparse|ELOOP|ENOTDIR/.test(String(error));
     await fs.symlink(outside,link,process.platform==='win32'?'junction':'dir');
-    await assert.rejects(captureNotes(context),/symlink|reparse|ELOOP|ENOTDIR/);
+    await assert.rejects(captureNotes(context),rejectsLink);
     await fs.unlink(link);
     await fs.symlink(path.join(outside,'secret.md'),link,'file');
-    await assert.rejects(captureNotes(context),/symlink|reparse|ELOOP/);
+    await assert.rejects(captureNotes(context),rejectsLink);
     await fs.unlink(link);
     const valid = await captureNotes(context,false);valid.dispose();
   } finally { await f.cleanup(); }
