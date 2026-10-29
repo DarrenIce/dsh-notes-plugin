@@ -16,7 +16,7 @@ npx skills add czm15053/write-notes-like-deepseek
 
 项目同时提供 DSH 插件。在 Web profile 启用一次后，兼容会话自动发现集中 Skill 与简短规则；【对话】【轨迹】旁新增【决策看板】，按所属项目读取实时笔记。无需向每个项目复制 Skill，也不要求配置项目 npm scripts。空白会话的页签显示时机沿用宿主行为。
 
-当前验证环境是 **Linux、Node 24、DSH `0.2.1-rc.2` Web profile**。安全捕获使用 Linux 目录句柄；其他平台和外部 agent 后端尚未验证。本包尚未发布 npm，可从本地构建安装。**以下命令必须在本仓库根目录执行**，安装路径由当前目录自动取得，无需手动填写占位路径：
+当前验证环境是 **Linux、Node 24、DSH `0.2.1-rc.2` Web profile**。插件后端的安全捕获依赖 Linux `/proc/self/fd`，当前原生 Windows 和 macOS 会明确返回 `unsupported-platform`，整套插件测试也尚不支持这些平台；外部 agent 后端尚未验证。本包尚未发布 npm，可在 Linux 或 WSL2 内构建安装。**以下 Bash 命令必须在本仓库根目录执行**，安装路径由当前目录自动取得，无需手动填写占位路径：
 
 ```sh
 npm ci
@@ -26,6 +26,15 @@ DSH_ROOT="$(npm root -g)/@deepseek-ai/dsh" npm test
 # 链接当前仓库的真实绝对路径；启用后刷新现有 DSH 页面
 dsh plugin --profile web add "link:$(pwd -P)"
 ```
+
+PowerShell 不支持 Bash 的 `DSH_ROOT=... npm test` 前缀语法。仅将环境变量设置改写为 PowerShell 形式时，应使用：
+
+```powershell
+$env:DSH_ROOT = Join-Path (npm root -g) '@deepseek-ai\dsh'
+npm test
+```
+
+这段改写只解决 Shell 语法错误，不表示原生 Windows 能通过完整测试或运行插件后端。当前在 Windows 机器上使用插件，需要在 WSL2 内安装 Linux 版 Node 和 DSH，再在 WSL2 终端执行上面的 Bash 流程；`DSH_ROOT` 必须指向 WSL2 内的 DSH 安装，不能指向 Windows 的全局 npm 目录。
 
 若之前误用了 `link:/absolute/path/write-notes-like-deepseek`，pnpm 可能留下指向不存在目录的链接。回到真实仓库根目录执行上面的构建和 `add` 命令，即可更新该包的错误依赖路径；不要把 `/absolute/path/...` 当作实际目录。
 
