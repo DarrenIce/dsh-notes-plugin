@@ -1,6 +1,24 @@
 # DSH 插件运行验证记录
 
-日期：2026-10-28。产品需求见 [PRD](./PRD.md)，实现边界见 [IMPLEMENT](./IMPLEMENT.md)，提交与任务见 [TODO](./TODO.md)。
+日期：2026-10-28（首轮）；2026-10-29 补充 Windows 原生支持。产品需求见 [PRD](./PRD.md)，实现边界见 [IMPLEMENT](./IMPLEMENT.md)，提交与任务见 [TODO](./TODO.md)。
+
+## Windows 原生验证（2026-10-29）
+
+环境为 Windows、Node `v24.18.0`、npm `11.16.0`、本机已安装的 DSH `0.2.1-rc.2`。保留当前工作树既有的 npm/npx JS 入口及 PowerShell 安装修复，在其上补齐运行时。
+
+- `npm test` 退出码 0：类型检查通过，core 10、server 25、client 21、真实宿主集成 1 共 57 项全部通过，Windows 无跳过；独立 Skill copy / symlink 两条安装路径也通过。
+- 服务测试覆盖快照/检索/正文/检查区间/最新校验、Git 空仓库及子目录基线、实时新建/编辑/移动/删除/重建、配置隔离和卸载回收。
+- 原生安全探针确认 `FILE_READ_ATTRIBUTES`（`0x80`）不能固定目录，即使拒绝写/删除共享，rename 和原地 junction 转换仍可成功。最终采用 `FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES`（`0x81`）及仅共享读；独立 Win32 探针和生产 helper 回归均确认 rename 被拒、reparse 修改所需写句柄以错误 32 拒绝，释放后恢复访问。
+- 新增普通 junction / 文件 symlink 拒绝、Unicode 和空格路径/原字节、缺失目录不落盘、4 MiB 限额及成功/失败后句柄释放测试。
+- 归档验证 LF / CRLF / 混合行尾保持原字节、封印、大小写/硬链接同文件后继提前拒绝、入站链接身份匹配。共享解析器使 Windows 反斜杠相对链接在校验和看板中一致。
+- 实际 build 生成 `lib/windows-capture.ps1` 和 `lib/archive-cli.mjs`。集成测试从临时 `node_modules/write-notes-like-deepseek` 加载生产产物，经真实 Cordis / Gateway / ToolRuntime 获取归档入口并执行 CRLF 归档；同时保留变化流、撤权和卸载验证。
+- `npm pack --json` 产生 37 项文件，压缩 120,871 字节，解包 423,464 字节；清单包含上述两个新资源。随后将实际 tarball 解包到独立临时目录，使用目标 DSH 依赖，以解包目录为 cwd 再跑完整真实宿主集成，退出码 0，Windows 捕获及工具返回的归档 CLI 均通过；专用临时目录已核对路径并清理。包未发布 npm，宿主配置未被替换。
+- `scripts/benchmark-plugin.ts 1000`：1,000 篇、正文估算 289,000 字节，冷捕获 2,195 ms，新扫描 2,774 ms，修改到快照 2,929 ms，RSS 增量 36 MiB，取消后 watcher / consumer 为 0 / 0。此为单机单次观察，Windows 每次捕获的 PowerShell / C# 启动有额外成本。
+
+当前运行中的 GUI 为 `http://127.0.0.1:3080`，没有启动替代服务器或重启当前 DSH。实际 `notes_begin_review` 在构建后仍返回不完整快照，说明当前服务未加载新实现；浏览器工具的 Agent Window 启动被宿主 Job Object 的 breakaway 限制阻断，因此本轮不宣称 GUI 页面已切换到新版本。需重新加载插件（必要时重启原 DSH Web 进程）后，再通过实际工具和看板核对；仅刷新页面不能保证服务端模块更新。本轮完整功能结论来自新产物的自动化/真实宿主模块测试，下面的 GUI 表格仍为历史 Linux 证据。
+
+跨平台封印还依赖项目保留归档原始字节；首次封存前按[归档说明](../../skills/write-notes-like-deepseek/references/archiving.md)设置实际归档目录的 `*.md -text`。不会自动重写既有封印掩盖换行变化。
+
 
 ## 1. 环境与证据分层
 

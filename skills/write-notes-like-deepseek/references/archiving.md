@@ -66,6 +66,16 @@
 
 ## 2. 归档的标准操作流
 
+跨 Windows / Linux 协作时，封印比较的是原始字节，Git 的 `core.autocrlf` 换行转换也会使 SHA-256 变化。首次封存前，在实际笔记根的 `archived/.gitattributes` 中配置并提交以下规则，使归档文件保持封存时的字节（LF 和 CRLF 都可保留）：
+
+```gitattributes
+*.md -text
+```
+
+此文件只约束归档目录。已有封印不因换行策略变化而重新计算；先从保留原始字节的副本恢复，再验证。插件不自动改变项目 Git 配置。
+
+DSH 插件通过 `notes_archive_entry` 返回已构建的 JavaScript CLI，直接使用返回的 executable 与 argv；不要在包的 `node_modules` 目录内改为 `node <某个 .ts>`，Node 24 不在那里执行 TypeScript 类型剥离。归档接受 LF/CRLF，并保留正文原有换行。
+
 推荐直接用 CLI（物理移动 + 封印 + 入站死链报告一次完成，**不依赖 git**）：
 
 ```bash

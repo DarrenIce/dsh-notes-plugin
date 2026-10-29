@@ -41,7 +41,7 @@ flowchart LR
 
 ## 3. 宿主接口与传输
 
-目标环境为 Linux、Node 24、DSH `0.2.1-rc.2`，Cordis `4.0.5`。服务端导入宿主协议，客户端 React 和 Cordis 等包由宿主提供，避免重复实例。
+目标环境为 Windows / Linux、Node 24、DSH `0.2.1-rc.2`，Cordis `4.0.5`。服务端导入宿主协议，客户端 React 和 Cordis 等包由宿主提供，避免重复实例。
 
 宿主 Remote 命名空间是 `decisionNotes`，方法包括 `context(sessionId)`、`snapshot(sessionId)`、`read(sessionId,id)`、`beginReview(sessionId)`、`validation(sessionId,reviewToken?)` 和 `changes(sessionId)`。每个方法显式声明 session 资源，沿用 Gateway 的访问控制；变化流每次交付前再次检查 RemoteAccess。客户端不能提交根目录或任意绝对文件路径。
 
@@ -71,7 +71,9 @@ flowchart LR
 
 ## 5. 安全捕获与快照一致性
 
-首版安全读取使用 Linux `/proc/self/fd`。从文件系统根开始逐级打开项目祖先、笔记目录和子目录，目录与文件均使用 `O_NOFOLLOW`。每层访问依赖已打开的父目录句柄，避免 realpath 检查后目录被替换为外部符号链接。根内符号链接也明确拒绝。
+Linux 安全读取使用 `/proc/self/fd`。从文件系统根开始逐级打开项目祖先、笔记目录和子目录，目录与文件均使用 `O_NOFOLLOW`。每层访问依赖已打开的父目录句柄，避免 realpath 检查后目录被替换为外部符号链接。根内符号链接也明确拒绝。
+
+Windows 异步启动系统 Windows PowerShell，加载构建包内 `lib/windows-capture.ps1` 的 C# 辅助实现。`CreateFileW` 逐层固定卷根、项目祖先和笔记目录，`FILE_FLAG_OPEN_REPARSE_POINT` 配合句柄属性检查拒绝符号链接、junction 等 reparse point。目录必须申请 `FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES`（`0x81`）并只共享读访问（`FILE_SHARE_READ`），直到捕获结束才释放；仅属性访问 `0x80` 不会使共享锁生效。该组合阻止目录重命名、替换以及 `FSCTL_SET_REPARSE_POINT` 所需的写句柄。文件通过同一受检查句柄有界读取；辅助进程结束后，Node 才物化临时镜像并计算指纹。辅助进程有超时和输出上限，不阻塞宿主事件循环。其他未实现平台明确报错。
 
 有界文件集写入插件私有的临时镜像，解析、正文和校验只使用该镜像。归档 append-only 检查的基线从真实项目 Git 获取后显式传入核心，不能把镜像的无 Git 环境误当原项目语义。临时镜像使用后立即删除，不修改项目或封印。
 
@@ -91,7 +93,7 @@ flowchart LR
 
 提供六个 agent 工具：`notes_context`、`notes_search`、`notes_read`、`notes_begin_review`、`notes_validate`、`notes_archive_entry`。工具从调用 agent 的宿主会话身份解析工作区，不接受模型指定 sessionId。目标 DSH 在注册时强制 agent.id 等于 agent.session.id。
 
-工具本身不写项目。归档入口只返回 executable 和 argv，由 agent 自身受权限约束的命令工具执行，不能借用宿主进程权限。CLI 归档和 `--write` 补封印共用跨进程排他锁；死进程遗留锁可以恢复，恢复标记异常遗留时安全超时并要求人工检查。
+工具本身不写项目。归档入口返回 `process.execPath` 和包内 `lib/archive-cli.mjs` 的 argv，由 agent 自身受权限约束的命令工具执行，不能借用宿主进程权限；不能直接在 `node_modules` 执行 `.ts`。CLI 归档只插入头部并保留 LF/CRLF/混合行尾的正文，使用文件身份拒绝同一文件的大小写或硬链接后继，并在移动前按身份收集入站链接。CLI 归档和 `--write` 补封印共用跨进程排他锁；死进程遗留锁可以恢复，恢复标记异常遗留时安全超时并要求人工检查。
 
 `notes_context` 展示实际获胜 Skill 的 provider、来源、资源基址，检查调用 scope 的 skill 工具和实际组装 prompt。项目或 preset 的同名 Skill 可遮蔽插件；complete prompt 可排除 section；外部后端、其他 profile 和不同 preset 不能未经验证就承诺覆盖。
 

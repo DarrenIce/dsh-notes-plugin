@@ -16,7 +16,7 @@ npx skills add czm15053/write-notes-like-deepseek
 
 项目同时提供 DSH 插件。在 Web profile 启用一次后，兼容会话自动发现集中 Skill 与简短规则；【对话】【轨迹】旁新增【决策看板】，按所属项目读取实时笔记。无需向每个项目复制 Skill，也不要求配置项目 npm scripts。空白会话的页签显示时机沿用宿主行为。
 
-当前验证环境是 **Linux、Node 24、DSH `0.2.1-rc.2` Web profile**。安全捕获使用 Linux 目录句柄；其他平台和外部 agent 后端尚未验证。本包尚未发布 npm，可从本地构建安装。**以下命令必须在本仓库根目录执行**，安装路径由当前目录自动取得，无需手动填写占位路径：
+当前支持 **Windows / Linux、Node 24、DSH `0.2.1-rc.2` Web profile**。Linux 使用目录描述符捕获；Windows 使用系统自带的 Windows PowerShell、`Add-Type` 和 Win32 固定句柄接口，支持看板、检索、全文、检查区间、校验、实时同步与归档，无需 WSL。Windows 若被组织策略禁止 PowerShell / `Add-Type`，安全捕获会明确报错。macOS 和外部 agent 后端尚未验证。本包尚未发布 npm，可从本地构建安装。**以下命令必须在本仓库根目录执行**，安装路径由当前目录自动取得，无需手动填写占位路径：
 
 ```sh
 npm ci
@@ -26,6 +26,21 @@ DSH_ROOT="$(npm root -g)/@deepseek-ai/dsh" npm test
 # 链接当前仓库的真实绝对路径；启用后刷新现有 DSH 页面
 dsh plugin --profile web add "link:$(pwd -P)"
 ```
+
+`npm test` 在 Windows 与 Linux 上均执行安全捕获、服务端和真实宿主集成用例；只有尚未支持的其他平台会显式跳过相关用例。更新链接安装的仓库后，先重新构建，再重新加载插件；若当前 DSH 进程仍使用旧模块，需重启原 DSH Web 进程并刷新页面。仅浏览器刷新不会替换已缓存的服务端模块。
+
+Windows PowerShell 对应写法。注意 `$(pwd -P)` 是 bash 语法，PowerShell 会把它当作 `Get-Location` 的参数并报错，命令最终只剩空的 `link:`，pnpm 会把 profile 目录自己链成依赖（特征是 `dsh-profile-web declares no dsh.bundle` 警告，插件其实没装上）：
+
+```powershell
+$env:DSH_ROOT = Join-Path (npm root -g) '@deepseek-ai\dsh'
+npm ci
+npm run build:plugin
+npm test
+# 用正斜杠绝对路径；反斜杠路径在包规格和 JSON 里都需要额外转义
+dsh plugin --profile web add "link:$((Get-Location).Path -replace '\\','/')"
+```
+
+若已误用空路径，先执行 `dsh plugin --profile web remove dsh-profile-web` 清掉自引用依赖（必要时再删除 `node_modules\dsh-profile-web` 残留链接），然后按上面的 PowerShell 命令重新安装。
 
 若之前误用了 `link:/absolute/path/write-notes-like-deepseek`，pnpm 可能留下指向不存在目录的链接。回到真实仓库根目录执行上面的构建和 `add` 命令，即可更新该包的错误依赖路径；不要把 `/absolute/path/...` 当作实际目录。
 
@@ -52,7 +67,7 @@ dsh plugin --profile web add "$(pwd -P)/write-notes-like-deepseek-0.1.0.tgz"
 
 覆盖值必须是工作区内相对目录，改配置不迁移文件。不同工作区/worktree 隔离，同根会话共享数据，各自保留浏览状态。看板沿用独立 HTML 版本的视觉与信息架构：架构基线、演进时间线、避坑智库、决策清单，含全局搜索、状态与分类筛选、关联与全文阅读；样式限定在看板作用域并跟随宿主明暗主题。看板激活时暂时隐藏底部输入框，切回【对话】恢复；有审批等待处理交互时输入框仍保留。外部编辑、删除和重连自动同步。“加入当前会话”只准备引用草稿，保留原文字和附件，由用户发送。
 
-DSH 适配正文使相关笔记维护跟随任务授权，不为每篇笔记另加确认门。agent 调用 `notes_begin_review` 建立检查区间，收尾携带 token 调用 `notes_validate` 获取最新完整校验。普通文件工具缺少可靠作者证据时，新问题保守报告来源不确定，不自动归责。归档入口由 agent 自身受权限约束的命令工具执行，宿主不代写。
+DSH 适配正文使相关笔记维护跟随任务授权，不为每篇笔记另加确认门。agent 调用 `notes_begin_review` 建立检查区间，收尾携带 token 调用 `notes_validate` 获取最新完整校验。普通文件工具缺少可靠作者证据时，新问题保守报告来源不确定，不自动归责。归档入口由 agent 自身受权限约束的命令工具执行，宿主不代写。LF、CRLF 和混合行尾的归档正文保留原字节；归档 CLI 使用已构建 JavaScript，支持安装到 `node_modules`。跨 Windows / Linux 共用归档时，首次封存前应在实际 `archived/.gitattributes` 配置 `*.md -text`，防止 Git 自动换行转换改变封印；详见[归档说明](skills/write-notes-like-deepseek/references/archiving.md)。笔记内部身份统一为正斜杠，相对链接中的 Windows 反斜杠会规范为正斜杠解析。
 
 项目/preset 的同名 Skill 可遮蔽插件，完整自定义 prompt 可排除短规则，工具诊断会展示当前实际状态。看板只读，不重写封印。安全捕获上限为单文件 4 MiB、总量 32 MiB、10,000 条目、32 层目录、5,000 篇笔记，超限返回明确不完整状态。
 
