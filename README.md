@@ -16,18 +16,27 @@ npx skills add czm15053/write-notes-like-deepseek
 
 项目同时提供 DSH 插件。在 Web profile 启用一次后，兼容会话自动发现集中 Skill 与简短规则；【对话】【轨迹】旁新增【决策看板】，按所属项目读取实时笔记。无需向每个项目复制 Skill，也不要求配置项目 npm scripts。空白会话的页签显示时机沿用宿主行为。
 
-当前验证环境是 **Linux、Node 24、DSH `0.2.1-rc.2` Web profile**。安全捕获使用 Linux 目录句柄；其他平台和外部 agent 后端尚未验证。本包尚未发布 npm，可从本地构建安装：
+当前验证环境是 **Linux、Node 24、DSH `0.2.1-rc.2` Web profile**。安全捕获使用 Linux 目录句柄；其他平台和外部 agent 后端尚未验证。本包尚未发布 npm，可从本地构建安装。**以下命令必须在本仓库根目录执行**，安装路径由当前目录自动取得，无需手动填写占位路径：
 
 ```sh
 npm ci
 npm run build:plugin
 # 测试需要目标 DSH 0.2.1-rc.2 已安装；自定义位置请替换 DSH_ROOT
 DSH_ROOT="$(npm root -g)/@deepseek-ai/dsh" npm test
-# 使用当前仓库的绝对路径；启用后刷新现有 DSH 页面
-dsh plugin --profile web add link:/absolute/path/write-notes-like-deepseek
+# 链接当前仓库的真实绝对路径；启用后刷新现有 DSH 页面
+dsh plugin --profile web add "link:$(pwd -P)"
 ```
 
-也可运行 `npm pack`，再用 `dsh plugin --profile web add /absolute/path/write-notes-like-deepseek-0.1.0.tgz` 安装完整产物。通过 Web 侧边栏插件管理页停用或移除；CLI 为 `dsh plugin --profile web remove write-notes-like-deepseek`。不需要启动另一个 Web 服务器。
+若之前误用了 `link:/absolute/path/write-notes-like-deepseek`，pnpm 可能留下指向不存在目录的链接。回到真实仓库根目录执行上面的构建和 `add` 命令，即可更新该包的错误依赖路径；不要把 `/absolute/path/...` 当作实际目录。
+
+也可在本仓库根目录执行以下命令安装完整产物（包版本变化时，以 `npm pack` 输出的文件名为准）：
+
+```sh
+npm pack
+dsh plugin --profile web add "$(pwd -P)/write-notes-like-deepseek-0.1.0.tgz"
+```
+
+通过 Web 侧边栏插件管理页停用或移除；CLI 为 `dsh plugin --profile web remove write-notes-like-deepseek`。不需要启动另一个 Web 服务器。pnpm 安装成功只说明依赖写入完成；实际启用还应确认 DSH 未报 bundle 加载错误，并在会话中核对页签和 `notes_context` 的实际资源来源。
 
 默认笔记根为项目内 `.agents/notes/`。浏览和校验不会创建目录；首次授权写入时才创建。调用 `notes_context` 查看实际根、工作区 ID、集中资源和实际 Skill 来源。在 Web profile 的 patch 层配置目录覆盖：
 
