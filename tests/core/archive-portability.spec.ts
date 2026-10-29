@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { archiveNote } from '../../skills/write-notes-like-deepseek/scripts/lib/archive.ts';
 import { validateArchive } from '../../skills/write-notes-like-deepseek/scripts/lib/validate-archive.ts';
+import { validateNotes } from '../../skills/write-notes-like-deepseek/scripts/lib/index.ts';
 import { installNoteAgent } from '../../src/server/note-tools.ts';
 
 const note = '# Agent Note: Windows 归档\n\nStatus: implemented\n\n## Problem\n问题\n\n## Decision\n选择\n\n## Alternatives considered\n无\n\n## Consequences\n结果\n';
@@ -75,6 +76,25 @@ for (const alias of ['hard link', 'Windows case alias'] as const) {
     writeFileSync(path.join(root, referrer), `${note}\n[归档前引用](${path.basename(aliasId)}#decision)\n`);
 
     const result = await archiveNote(root, id);
+    assert.equal(result.ok, true, result.errors.join('\n'));
+    assert.deepEqual(result.inbound, [referrer]);
+  });
+}
+
+for (const wrapped of [false, true]) {
+  test(`archive reports Windows relative inbound links${wrapped ? ' in angle brackets' : ''}`, async t => {
+    const root = path.join(fixture(t), '中文 notes');
+    const target = 'implemented/architecture/2026-10-29-中文 空格.md';
+    const referrer = 'implemented/process/2026-10-29-referrer.md';
+    const relative = '..\\architecture\\2026-10-29-中文 空格.md#decision';
+    const href = wrapped ? `<${relative}>` : relative;
+    mkdirSync(path.dirname(path.join(root, target)), { recursive: true });
+    mkdirSync(path.dirname(path.join(root, referrer)), { recursive: true });
+    writeFileSync(path.join(root, target), note);
+    writeFileSync(path.join(root, referrer), `${note}\n[归档前引用](${href})\n`);
+    assert.deepEqual(validateNotes(root).issues, []);
+
+    const result = await archiveNote(root, target);
     assert.equal(result.ok, true, result.errors.join('\n'));
     assert.deepEqual(result.inbound, [referrer]);
   });

@@ -110,7 +110,7 @@ export async function archiveNote(root: string, target: string, options: { succe
         const file = safePath(root, note.rel);
         const text = readFileSync(file, 'utf8');
         for (const match of text.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)) {
-          const href = match[2]?.trim();
+          const href = match[2]?.trim().replace(/^<|>$/g, '').replace(/\\/g, '/');
           if (!href || /^(?:https?:|#|mailto:)/.test(href)) continue;
           const ref = href.split('#')[0];
           if (ref && safeCompare(dirname(file), ref, targetPath)) { inbound.push(note.rel); break; }
