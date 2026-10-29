@@ -18,7 +18,7 @@ test('native board filters, reads safely and retains independent session views',
   const render = async (sessionId: string) => { await act(async () => root.render(<DecisionBoard sessionId={sessionId} snapshot={data} />)); };
   const button = (text: string) => [...document.querySelectorAll('button')].find(el => el.textContent?.includes(text)) as HTMLButtonElement;
   await render('one');
-  await act(async () => button('文档目录').click());
+  await act(async () => button('决策清单').click());
   assert.match(document.body.textContent!, /匹配 3 条/);
   await act(async () => button('Alpha').click());
   assert.equal(document.querySelector('.dnb-reader img'), null);
@@ -28,7 +28,7 @@ test('native board filters, reads safely and retains independent session views',
   assert.match(document.querySelector('.dnb-reader')!.textContent!, /Beta/);
   await render('two');
   assert.equal(document.querySelector('.dnb-reader'), null);
-  assert.equal(button('总览').getAttribute('aria-pressed'), 'true');
+  assert.equal(button('架构基线').getAttribute('aria-pressed'), 'true');
   await render('one');
   assert.match(document.querySelector('.dnb-reader')!.textContent!, /Beta/);
   await act(async () => root.unmount());
@@ -50,7 +50,7 @@ test('restores saved reading and scroll only after the same root is ready', asyn
   assert.equal(getBrowseState('saved').selected, id);
   await act(async () => root.render(<DecisionBoard sessionId="saved" snapshot={ready} />));
   assert.match(document.querySelector('.dnb-reader')!.textContent!, /Alpha/);
-  assert.equal((document.querySelector('.dnb-reader') as HTMLElement).scrollTop, 42);
+  assert.equal((document.querySelector('.dnb-reader-body') as HTMLElement).scrollTop, 42);
   assert.equal((document.querySelector('.dnb') as HTMLElement).scrollTop, 80);
   await act(async () => root.render(<DecisionBoard sessionId="saved" snapshot={{ ...ready, configIdentity: 'root-b' }} />));
   assert.equal(document.querySelector('.dnb-reader'), null);

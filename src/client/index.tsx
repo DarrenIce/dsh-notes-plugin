@@ -22,6 +22,7 @@ function ConnectedSession({ sessionId, remote, inputActions }: { sessionId: stri
     status: live.status,
     configRevision: live.context?.configRevision || '',
     configIdentity: live.context ? JSON.stringify([live.context.workspaceId, live.context.projectRoot, live.context.notesRoot, live.context.configRevision]) : undefined,
+    notesPath: live.context?.notesPath,
     notes: live.snapshot?.notes.map(note => ({ id: note.id, raw: note.rawBody })) || [],
     message: live.message,
     complete: live.snapshot?.complete,
