@@ -3,14 +3,15 @@ import { createDecisionNotesClient, mountDecisionNotesStream } from '../contract
 import { DecisionBoard, type BoardSnapshot } from './decision-board';
 import { watchBoard, type BoardRemote, type LiveBoardState } from './board-remote';
 import { insertNoteReference, type DraftActions } from './note-reference';
+import { registerComposerMask } from './composer-mask';
 import css from './board.css';
 
 export const inject = ['slots', 'connection', 'remote'];
 
-function ConnectedBoard(props: { sessionId: string; remote: BoardRemote; inputActions: DraftActions }) {
+function ConnectedBoard(props: { sessionId: string; remote: BoardRemote; inputActions: DraftActions; maskComposer: () => () => void }) {
   return <ConnectedSession key={props.sessionId} {...props} />;
 }
-function ConnectedSession({ sessionId, remote, inputActions }: { sessionId: string; remote: BoardRemote; inputActions: DraftActions }) {
+function ConnectedSession({ sessionId, remote, inputActions, maskComposer }: { sessionId: string; remote: BoardRemote; inputActions: DraftActions; maskComposer: () => () => void }) {
   const [live, setLive] = useState<LiveBoardState>({ status: 'loading' });
   const [referenceMessage, setReferenceMessage] = useState('');
   const operation = useRef(0);
@@ -28,7 +29,7 @@ function ConnectedSession({ sessionId, remote, inputActions }: { sessionId: stri
     complete: live.snapshot?.complete,
     validation: live.snapshot?.validation,
   };
-  return <DecisionBoard sessionId={sessionId} snapshot={snapshot} referenceMessage={referenceMessage} onReference={note => {
+  return <DecisionBoard sessionId={sessionId} snapshot={snapshot} referenceMessage={referenceMessage} maskComposer={maskComposer} onReference={note => {
     const state = current.current;
     const context = state.context;
     if (!alive.current || state.status !== 'ready' || !context || !state.snapshot?.complete || !state.snapshot.notes.some(item => item.id === note.id)) {
@@ -65,6 +66,6 @@ export function apply(ctx: any) {
   }, 'decision-notes: styles');
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view', id: 'decision-notes', order: 20, label: '决策看板',
-    inject: (sessionId: string) => ({ sessionId, remote }),
+    inject: (sessionId: string) => ({ sessionId, remote, maskComposer: () => registerComposerMask(ctx, sessionId) }),
   }, ConnectedBoard));
 }

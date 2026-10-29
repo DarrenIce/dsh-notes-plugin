@@ -116,3 +116,18 @@ test('anchor copy falls back when the async clipboard is unavailable', async () 
   assert.match(copyButton.textContent!, /已复制/);
   await dispose(root, container);
 });
+
+test('composer takeover follows the board mount without churning on snapshots', async () => {
+  const { root, container } = setup();
+  let attached = 0;
+  let disposed = 0;
+  const maskComposer = () => { attached += 1; return () => { disposed += 1; }; };
+  const snapshot = { status: 'ready' as const, configRevision: 'r', configIdentity: 'ui-mask', complete: true, notes };
+  await act(async () => root.render(<DecisionBoard sessionId="ui-mask" snapshot={snapshot} maskComposer={maskComposer} />));
+  assert.equal(attached, 1);
+  await act(async () => root.render(<DecisionBoard sessionId="ui-mask" snapshot={{ ...snapshot, configRevision: 'r2' }} maskComposer={maskComposer} />));
+  assert.equal(attached, 1);
+  await act(async () => root.unmount());
+  assert.equal(disposed, 1);
+  container.remove();
+});

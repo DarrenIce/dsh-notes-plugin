@@ -21,6 +21,8 @@ export interface DecisionBoardProps {
   snapshot: BoardSnapshot;
   onReference?: (note: BoardNote) => void;
   referenceMessage?: string;
+  /** Hide the host composer while this board view is mounted; returns its disposer. */
+  maskComposer?: () => () => void;
 }
 
 const tabs: [BoardView, string, string][] = [
@@ -39,7 +41,7 @@ export function DecisionBoard(props: DecisionBoardProps) {
   return <BoardSession key={props.sessionId} {...props} />;
 }
 
-function BoardSession({ sessionId, snapshot, onReference, referenceMessage }: DecisionBoardProps) {
+function BoardSession({ sessionId, snapshot, onReference, referenceMessage, maskComposer }: DecisionBoardProps) {
   const [state, setState] = useState(() => getBrowseState(sessionId));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchIndex, setSearchIndex] = useState(-1);
@@ -47,8 +49,17 @@ function BoardSession({ sessionId, snapshot, onReference, referenceMessage }: De
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollRestored = useRef(false);
+  const maskRef = useRef(maskComposer);
   const identity = snapshot.status !== 'loading' && snapshot.configRevision !== ''
     ? snapshot.configIdentity ?? String(snapshot.configRevision) : null;
+
+  useEffect(() => { maskRef.current = maskComposer; }, [maskComposer]);
+  // The view is mounted only while its tab is active, so this takeover also
+  // restores the resident composer on the next tab switch.
+  useEffect(() => {
+    const dispose = maskRef.current?.();
+    return () => { dispose?.(); };
+  }, []);
 
   useEffect(() => {
     if (identity === null) return;
